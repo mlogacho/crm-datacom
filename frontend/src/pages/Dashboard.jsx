@@ -1,14 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Server, AlertCircle, DollarSign, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
-
-const stats = [
-    { name: 'Total Clientes', value: '1,204', icon: Users, change: '+12%', changeType: 'increase' },
-    { name: 'Servicios Activos', value: '3,492', icon: Server, change: '+5.4%', changeType: 'increase' },
-    { name: 'Tickets Abiertos', value: '45', icon: AlertCircle, change: '-14%', changeType: 'decrease' },
-    { name: 'Facturación Mensual', value: '$248K', icon: DollarSign, change: '+4.3%', changeType: 'increase' },
-];
+import axios from 'axios';
 
 export default function Dashboard() {
+    const [stats, setStats] = useState([
+        { name: 'Total Clientes', value: '0', icon: Users, change: 'Actualizado', changeType: 'increase' },
+        { name: 'Servicios de Cliente', value: '0', icon: Server, change: 'Actualizado', changeType: 'increase' },
+        { name: 'Tickets Abiertos', value: '45', icon: AlertCircle, change: '-14%', changeType: 'decrease' },
+        { name: 'Facturación Mensual', value: '$248K', icon: DollarSign, change: '+4.3%', changeType: 'increase' },
+    ]);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                // Fetch Clients Count
+                const clientsRes = await axios.get('/api/clients/clients/');
+                const clientsCount = clientsRes.data.count ?? (clientsRes.data.results ? clientsRes.data.results.length : clientsRes.data.length);
+
+                // Fetch Services Count
+                const servicesRes = await axios.get('/api/services/client-services/');
+                const servicesCount = servicesRes.data.count ?? (servicesRes.data.results ? servicesRes.data.results.length : servicesRes.data.length);
+
+                setStats(prev => [
+                    { ...prev[0], value: clientsCount.toString() },
+                    { ...prev[1], value: servicesCount.toString() },
+                    prev[2],
+                    prev[3]
+                ]);
+
+            } catch (error) {
+                console.error("Error fetching dashboard data:", error);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
+
     return (
         <div className="animate-fade-in">
             <div className="sm:flex sm:items-center sm:justify-between mb-8">
