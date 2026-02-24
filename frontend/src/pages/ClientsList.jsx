@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload } from 'lucide-react';
 import axios from 'axios';
 
 export default function ClientsList() {
     const [clients, setClients] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importFile, setImportFile] = useState(null);
 
     useEffect(() => {
         fetchClients();
@@ -101,6 +103,33 @@ export default function ClientsList() {
         }
     };
 
+    const handleImportSubmit = async (e) => {
+        e.preventDefault();
+        if (!importFile) {
+            alert("Por favor selecciona un archivo CSV.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', importFile);
+
+        try {
+            const response = await axios.post('/api/clients/import/', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            fetchClients();
+            setIsImportModalOpen(false);
+            setImportFile(null);
+            alert(`¡Importación exitosa!\nClientes importados: ${response.data.clients_imported}\nServicios migrados: ${response.data.services_imported}`);
+        } catch (error) {
+            console.error('Error importing clients:', error);
+            const errorMsg = error.response?.data?.error ? error.response.data.error : error.message;
+            alert(`Error durante la importación: ${errorMsg}`);
+        }
+    };
+
     const getClientIcon = (type) => {
         switch (type) {
             case 'HOUSING': return <Building2 className="w-5 h-5 text-blue-500" />;
@@ -133,7 +162,14 @@ export default function ClientsList() {
                     <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900">Directorio de Clientes</h1>
                     <p className="mt-2 text-sm text-slate-600">Gestiona toda la cartera de clientes de DATACOM S.A.</p>
                 </div>
-                <div className="mt-4 sm:mt-0">
+                <div className="mt-4 sm:mt-0 flex items-center gap-3">
+                    <button
+                        className="btn-outline flex items-center gap-2"
+                        onClick={() => setIsImportModalOpen(true)}
+                    >
+                        <Upload className="w-4 h-4" />
+                        <span>Migrar Excel/CSV</span>
+                    </button>
                     <button
                         className="btn-primary flex items-center gap-2"
                         onClick={() => setIsModalOpen(true)}
@@ -335,6 +371,59 @@ export default function ClientsList() {
                                 </button>
                                 <button type="submit" className="btn-primary">
                                     Registrar Cliente
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Importación CSV */}
+            {isImportModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsImportModalOpen(false)}></div>
+
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-slate-900">Migrar Base de Datos Actual (CSV)</h3>
+                            <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleImportSubmit} className="p-6">
+                            <div className="mb-6">
+                                <p className="text-sm text-slate-600 mb-4">
+                                    Asegúrese de exportar su archivo de Excel (`.xlsx`) a formato <strong>Valores separados por comas (.csv)</strong>.
+                                    El archivo debe contener las cabeceras exactas (REGION, CIUDAD, CLIENTE, SEGMENTO, ESTADO...).
+                                </p>
+                                <label className="block text-sm font-medium leading-6 text-slate-900">Seleccionar Archivo .CSV</label>
+                                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 hover:border-primary-500 transition-colors bg-slate-50">
+                                    <div className="text-center">
+                                        <Upload className="mx-auto h-12 w-12 text-slate-300" aria-hidden="true" />
+                                        <div className="mt-4 flex text-sm leading-6 text-slate-600 justify-center">
+                                            <label htmlFor="file-upload" className="relative cursor-pointer rounded-md bg-white font-semibold text-primary-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-primary-600 hover:text-primary-500">
+                                                <span>Subir un archivo</span>
+                                                <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv" onChange={(e) => setImportFile(e.target.files[0])} />
+                                            </label>
+                                        </div>
+                                        <p className="text-xs leading-5 text-slate-500 mt-2">
+                                            {importFile ? importFile.name : 'Solo archivos .csv'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-x-4">
+                                <button type="button" onClick={() => setIsImportModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn-primary flex items-center gap-2" disabled={!importFile}>
+                                    <Upload className="w-4 h-4" />
+                                    Iniciar Migración
                                 </button>
                             </div>
                         </form>

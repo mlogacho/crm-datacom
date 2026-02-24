@@ -40,10 +40,16 @@ class ClientService(models.Model):
     bandwidth = models.CharField(max_length=100, blank=True, null=True, verbose_name="Ancho de Banda")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROSPECTING')
-    agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Acordado")
+    agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Acordado (MRC)")
     start_date = models.DateField(verbose_name="Fecha de Inicio")
     end_date = models.DateField(verbose_name="Fecha de Fin", blank=True, null=True)
     
+    # Legacy DB Fields
+    project_type = models.CharField(max_length=100, verbose_name="Tipo de Proyecto", blank=True, null=True)
+    nrc = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="NRC", blank=True, null=True, default=0.00)
+    management_type = models.CharField(max_length=100, verbose_name="Tipo de Gestión", blank=True, null=True)
+    call_result = models.CharField(max_length=255, verbose_name="Resultado de Llamadas", blank=True, null=True)
+
     notes = models.TextField(blank=True, null=True, verbose_name="Notas")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
