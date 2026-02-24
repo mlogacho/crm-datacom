@@ -34,7 +34,7 @@ export default function ServicesList() {
         type: 'INT',
         name: '',
         price: '',
-        status: 'Activo'
+        status: 'PROSPECTING'
     });
 
     const getServiceConfig = (typeId) => {
@@ -60,7 +60,7 @@ export default function ServicesList() {
 
         setServices([newService, ...services]);
         setIsModalOpen(false);
-        setFormData({ clientId: '', type: 'INT', name: '', price: '', status: 'Activo' });
+        setFormData({ clientId: '', type: 'INT', name: '', price: '', status: 'PROSPECTING' });
     };
 
     const handleDelete = (id) => {
@@ -70,9 +70,36 @@ export default function ServicesList() {
     };
 
     const getStatusBadge = (status) => {
-        if (status === 'Activo') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Activo</span>;
-        if (status === 'Suspendido') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Suspendido</span>;
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{status}</span>;
+        const bgColors = {
+            'PROSPECTING': 'bg-blue-100 text-blue-800',
+            'CONTACTED': 'bg-indigo-100 text-indigo-800',
+            'FIRST_MEETING': 'bg-purple-100 text-purple-800',
+            'OFFERED': 'bg-yellow-100 text-yellow-800',
+            'FOLLOW_UP': 'bg-orange-100 text-orange-800',
+            'CLOSING_MEETING': 'bg-pink-100 text-pink-800',
+            'DEMO': 'bg-cyan-100 text-cyan-800',
+            'CONTRACT_SIGNED': 'bg-emerald-100 text-emerald-800',
+            'BACKLOG': 'bg-slate-100 text-slate-800',
+            'INSTALLED': 'bg-green-100 text-green-800',
+            'LOST': 'bg-red-100 text-red-800',
+        };
+        const labels = {
+            'PROSPECTING': 'Prospección',
+            'CONTACTED': 'Contactado',
+            'FIRST_MEETING': 'Primera Cita',
+            'OFFERED': 'Ofertado',
+            'FOLLOW_UP': 'Seguimiento',
+            'CLOSING_MEETING': 'Cita de Cierre',
+            'DEMO': 'Demo',
+            'CONTRACT_SIGNED': 'Firma de Contrato',
+            'BACKLOG': 'Backlog',
+            'INSTALLED': 'Instalado',
+            'LOST': 'Negocio Perdido',
+        };
+        const colorClass = bgColors[status] || 'bg-slate-100 text-slate-800';
+        const labelText = labels[status] || status;
+
+        return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{labelText}</span>;
     };
 
     return (
@@ -235,9 +262,17 @@ export default function ServicesList() {
                                     <div>
                                         <label className="block text-sm font-medium leading-6 text-slate-900">Estado Inicial</label>
                                         <select name="status" value={formData.status} onChange={handleInputChange} className="mt-1 input-field bg-white">
-                                            <option value="Activo">Activo (En Producción)</option>
-                                            <option value="Programado">Programado / Instalando</option>
-                                            <option value="Suspendido">Suspendido</option>
+                                            <option value="PROSPECTING">Prospección</option>
+                                            <option value="CONTACTED">Contactado</option>
+                                            <option value="FIRST_MEETING">Primera Cita</option>
+                                            <option value="OFFERED">Ofertado</option>
+                                            <option value="FOLLOW_UP">Seguimiento</option>
+                                            <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                            <option value="DEMO">Demo</option>
+                                            <option value="CONTRACT_SIGNED">Firma de Contrato</option>
+                                            <option value="BACKLOG">Backlog</option>
+                                            <option value="INSTALLED">Instalado</option>
+                                            <option value="LOST">Negocio Perdido</option>
                                         </select>
                                     </div>
                                 </div>

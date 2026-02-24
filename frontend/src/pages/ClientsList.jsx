@@ -70,7 +70,8 @@ export default function ClientsList() {
         try {
             const payload = {
                 ...formData,
-                client_type: formData.type
+                client_type: formData.type,
+                name: formData.name.trim() === '' ? formData.legal_name : formData.name
             };
             delete payload.type;
             delete payload.tax_id_type;

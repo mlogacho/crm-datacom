@@ -18,9 +18,17 @@ class ServiceCatalog(models.Model):
 
 class ClientService(models.Model):
     STATUS_CHOICES = [
-        ('ACTIVE', 'Activo'),
-        ('SUSPENDED', 'Suspendido'),
-        ('CANCELLED', 'Cancelado'),
+        ('PROSPECTING', 'Prospección'),
+        ('CONTACTED', 'Contactado'),
+        ('FIRST_MEETING', 'Primera Cita'),
+        ('OFFERED', 'Ofertado'),
+        ('FOLLOW_UP', 'Seguimiento'),
+        ('CLOSING_MEETING', 'Cita de Cierre'),
+        ('DEMO', 'Demo'),
+        ('CONTRACT_SIGNED', 'Firma de Contrato'),
+        ('BACKLOG', 'Backlog'),
+        ('INSTALLED', 'Instalado'),
+        ('LOST', 'Negocio Perdido'),
     ]
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='services')
@@ -31,7 +39,7 @@ class ClientService(models.Model):
     rack_space = models.CharField(max_length=100, blank=True, null=True, verbose_name="Espacio en Rack")
     bandwidth = models.CharField(max_length=100, blank=True, null=True, verbose_name="Ancho de Banda")
     
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROSPECTING')
     agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Acordado")
     start_date = models.DateField(verbose_name="Fecha de Inicio")
     end_date = models.DateField(verbose_name="Fecha de Fin", blank=True, null=True)
