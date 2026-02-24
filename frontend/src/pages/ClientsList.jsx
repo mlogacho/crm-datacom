@@ -14,7 +14,8 @@ export default function ClientsList() {
     const fetchClients = async () => {
         try {
             const response = await axios.get('/api/clients/clients/');
-            const mappedClients = response.data.map(client => ({
+            const dataList = response.data.results ? response.data.results : response.data;
+            const mappedClients = dataList.map(client => ({
                 id: client.id,
                 name: client.name,
                 legal_name: client.legal_name,
@@ -80,6 +81,7 @@ export default function ClientsList() {
             fetchClients();
             setIsModalOpen(false);
             setFormData({ name: '', legal_name: '', tax_id_type: 'RUC', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
+            alert('¡Cliente registrado exitosamente!');
         } catch (error) {
             console.error('Error creating client:', error);
             const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
@@ -116,6 +118,13 @@ export default function ClientsList() {
             </span>
         );
     };
+
+    const filteredClients = clients.filter(client =>
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.legal_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.tax_id.includes(searchTerm)
+    );
 
     return (
         <div className="animate-fade-in">
@@ -167,7 +176,7 @@ export default function ClientsList() {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
-                            {clients.map((client) => (
+                            {filteredClients.map((client) => (
                                 <tr key={client.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
@@ -214,7 +223,7 @@ export default function ClientsList() {
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-slate-700">
-                                Mostrando <span className="font-medium">{clients.length > 0 ? 1 : 0}</span> a <span className="font-medium">{clients.length}</span> de <span className="font-medium">{clients.length}</span> resultados
+                                Mostrando <span className="font-medium">{filteredClients.length > 0 ? 1 : 0}</span> a <span className="font-medium">{filteredClients.length}</span> de <span className="font-medium">{filteredClients.length}</span> resultados
                             </p>
                         </div>
                         <div>
