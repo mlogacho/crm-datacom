@@ -1,17 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2 } from 'lucide-react';
-
-// Datos estáticos temporales mientras se conecta el backend
-const initialClients = [
-    { id: 1, name: 'Acme Corp', legal_name: 'Acme Corporation S.A.', type: 'HOUSING', status: 'Activo', email: 'contacto@acme.com', phone: '+123456789' },
-    { id: 2, name: 'TechSolutions', legal_name: 'Tech Solutions LLC', type: 'APP_DEV', status: 'Activo', email: 'info@techsol.com', phone: '+987654321' },
-    { id: 3, name: 'GlobalNet', legal_name: 'Global Networks Inc.', type: 'TELECOM', status: 'Suspendido', email: 'admin@globalnet.com', phone: '+1122334455' },
-];
+import axios from 'axios';
 
 export default function ClientsList() {
-    const [clients, setClients] = useState(initialClients);
+    const [clients, setClients] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    useEffect(() => {
+        fetchClients();
+    }, []);
+
+    const fetchClients = async () => {
+        try {
+            const response = await axios.get('/api/clients/clients/');
+            const mappedClients = response.data.map(client => ({
+                id: client.id,
+                name: client.name,
+                legal_name: client.legal_name,
+                tax_id: client.tax_id,
+                type: client.client_type,
+                status: client.is_active ? 'Activo' : 'Inactivo',
+                email: client.email,
+                phone: client.phone,
+                address: client.address
+            }));
+            setClients(mappedClients);
+        } catch (error) {
+            console.error('Error fetching clients:', error);
+        }
+    };
 
     // Form state
     const [formData, setFormData] = useState({
@@ -29,23 +47,34 @@ export default function ClientsList() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Here we would typically make an API call (axios.post('/api/clients/', formData))
-        const newClient = {
-            id: clients.length + 1,
-            ...formData,
-            status: 'Activo'
-        };
-        setClients([newClient, ...clients]);
-        setIsModalOpen(false);
-        // Reset form
-        setFormData({ name: '', legal_name: '', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
+        try {
+            const payload = {
+                ...formData,
+                client_type: formData.type
+            };
+            delete payload.type;
+
+            await axios.post('/api/clients/clients/', payload);
+            fetchClients();
+            setIsModalOpen(false);
+            setFormData({ name: '', legal_name: '', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
+        } catch (error) {
+            console.error('Error creating client:', error);
+            alert('Error al crear el cliente. Por favor, verifique los datos o si el RUC/NIT está duplicado.');
+        }
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (window.confirm('¿Estás seguro que deseas eliminar permanentemente este cliente?')) {
-            setClients(clients.filter(client => client.id !== id));
+            try {
+                await axios.delete(`/api/clients/clients/${id}/`);
+                setClients(clients.filter(client => client.id !== id));
+            } catch (error) {
+                console.error('Error deleting client:', error);
+                alert('Error al eliminar el cliente.');
+            }
         }
     };
 
@@ -164,7 +193,7 @@ export default function ClientsList() {
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-slate-700">
-                                Mostrando <span className="font-medium">1</span> a <span className="font-medium">{clients.length}</span> de <span className="font-medium">1204</span> resultados
+                                Mostrando <span className="font-medium">{clients.length > 0 ? 1 : 0}</span> a <span className="font-medium">{clients.length}</span> de <span className="font-medium">{clients.length}</span> resultados
                             </p>
                         </div>
                         <div>
