@@ -35,6 +35,7 @@ export default function ClientsList() {
     const [formData, setFormData] = useState({
         name: '',
         legal_name: '',
+        tax_id_type: 'RUC',
         tax_id: '',
         type: 'HOUSING',
         email: '',
@@ -49,20 +50,39 @@ export default function ClientsList() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        const isNumeric = /^\d+$/.test(formData.tax_id);
+        if (!isNumeric) {
+            alert('El RUC o Cédula debe contener solo números.');
+            return;
+        }
+
+        if (formData.tax_id_type === 'RUC' && formData.tax_id.length !== 13) {
+            alert('El RUC debe tener exactamente 13 dígitos numéricos.');
+            return;
+        }
+
+        if (formData.tax_id_type === 'CEDULA' && formData.tax_id.length !== 10) {
+            alert('La Cédula debe tener exactamente 10 dígitos numéricos.');
+            return;
+        }
+
         try {
             const payload = {
                 ...formData,
                 client_type: formData.type
             };
             delete payload.type;
+            delete payload.tax_id_type;
 
             await axios.post('/api/clients/clients/', payload);
             fetchClients();
             setIsModalOpen(false);
-            setFormData({ name: '', legal_name: '', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
+            setFormData({ name: '', legal_name: '', tax_id_type: 'RUC', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
         } catch (error) {
             console.error('Error creating client:', error);
-            alert('Error al crear el cliente. Por favor, verifique los datos o si el RUC/NIT está duplicado.');
+            const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+            alert(`Error al crear el cliente: ${errorMsg}\nPor favor, verifique los datos o si el documento está duplicado.`);
         }
     };
 
@@ -237,9 +257,13 @@ export default function ClientsList() {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="tax_id" className="block text-sm font-medium leading-6 text-slate-900">RUC / NIT <span className="text-red-500">*</span></label>
-                                    <div className="mt-1">
-                                        <input type="text" name="tax_id" id="tax_id" required value={formData.tax_id} onChange={handleInputChange} className="input-field" placeholder="Ej. 1790000000001" />
+                                    <label htmlFor="tax_id" className="block text-sm font-medium leading-6 text-slate-900">Documento de Identidad <span className="text-red-500">*</span></label>
+                                    <div className="mt-1 flex gap-2">
+                                        <select name="tax_id_type" value={formData.tax_id_type} onChange={handleInputChange} className="input-field bg-white w-1/3">
+                                            <option value="RUC">RUC</option>
+                                            <option value="CEDULA">Cédula</option>
+                                        </select>
+                                        <input type="text" name="tax_id" id="tax_id" required value={formData.tax_id} onChange={handleInputChange} className="input-field w-2/3" placeholder={formData.tax_id_type === 'RUC' ? "13 dígitos" : "10 dígitos"} />
                                     </div>
                                 </div>
 
