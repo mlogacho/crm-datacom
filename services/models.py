@@ -1,0 +1,44 @@
+from django.db import models
+from clients.models import Client
+
+class ServiceType(models.TextChoices):
+    HOUSING = 'HOUSING', 'Housing/Colocation'
+    TELECOM = 'TELECOM', 'Telecom / Internet'
+    APP_DEV = 'APP_DEV', 'Desarrollo de Software'
+    OTHER = 'OTHER', 'Otros Servicios'
+
+class ServiceCatalog(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Nombre del Servicio")
+    description = models.TextField(verbose_name="Descripción", blank=True, null=True)
+    service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.OTHER)
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Base", default=0.00)
+
+    def __str__(self):
+        return self.name
+
+class ClientService(models.Model):
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Activo'),
+        ('SUSPENDED', 'Suspendido'),
+        ('CANCELLED', 'Cancelado'),
+    ]
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='services')
+    service = models.ForeignKey(ServiceCatalog, on_delete=models.PROTECT, related_name='instances')
+    
+    # Technical details
+    ip_address = models.GenericIPAddressField(protocol='both', unpack_ipv4=False, blank=True, null=True, verbose_name="Dirección IP Asignada")
+    rack_space = models.CharField(max_length=100, blank=True, null=True, verbose_name="Espacio en Rack")
+    bandwidth = models.CharField(max_length=100, blank=True, null=True, verbose_name="Ancho de Banda")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Acordado")
+    start_date = models.DateField(verbose_name="Fecha de Inicio")
+    end_date = models.DateField(verbose_name="Fecha de Fin", blank=True, null=True)
+    
+    notes = models.TextField(blank=True, null=True, verbose_name="Notas")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.client.name} - {self.service.name}"
