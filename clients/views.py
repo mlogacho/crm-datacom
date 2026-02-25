@@ -115,20 +115,23 @@ class ImportClientsView(APIView):
                 if not email or '@' not in email:
                     email = "contacto@desconocido.com"
 
-                # Find or create Client by name
-                client, client_created = Client.objects.get_or_create(
-                    name=client_name,
-                    defaults={
-                        'tax_id': tax_id,
-                        'email': email,
-                        'region': region,
-                        'city': city,
-                        'segment': segment,
-                        'account_manager': account_manager,
-                        'client_type': 'OTHER'
-                    }
-                )
-                if client_created: created_clients += 1
+                # Find or create Client by name (Handling MultipleObjectsReturned)
+                client = Client.objects.filter(name=client_name).first()
+                client_created = False
+                
+                if not client:
+                    client = Client.objects.create(
+                        name=client_name,
+                        tax_id=tax_id,
+                        email=email,
+                        region=region,
+                        city=city,
+                        segment=segment,
+                        account_manager=account_manager,
+                        client_type='OTHER'
+                    )
+                    client_created = True
+                    created_clients += 1
 
                 # Update client if existing
                 if not client_created:
@@ -143,23 +146,26 @@ class ImportClientsView(APIView):
                 contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])[:255]
                 phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])[:50]
                 if contact_name:
-                    Contact.objects.get_or_create(
-                        client=client,
-                        name=contact_name,
-                        defaults={
-                            'email': email,
-                            'phone': phones
-                        }
-                    )
+                    contact = Contact.objects.filter(client=client, name=contact_name).first()
+                    if not contact:
+                        Contact.objects.create(
+                            client=client,
+                            name=contact_name,
+                            email=email,
+                            phone=phones
+                        )
 
                 # Extract Service Data
                 service_str = get_col(row, ['SERVICIO', 'SERVICIOS', 'P&S', 'PRODUCTO'])
                 if service_str:
                     # Find or create Service Catalog item
-                    service_cat, cat_created = ServiceCatalog.objects.get_or_create(
-                        name=service_str,
-                        defaults={'service_type': 'OTHER', 'base_price': 0.00}
-                    )
+                    service_cat = ServiceCatalog.objects.filter(name=service_str).first()
+                    if not service_cat:
+                        service_cat = ServiceCatalog.objects.create(
+                            name=service_str,
+                            service_type='OTHER',
+                            base_price=0.00
+                        )
 
                     project_type = get_col(row, ['TIPO DE PROYECTO', 'PROYECTO'])
                     estado_str = get_col(row, ['ESTADO']).upper()
