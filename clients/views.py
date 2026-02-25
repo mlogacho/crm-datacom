@@ -31,8 +31,13 @@ class ImportClientsView(APIView):
             return Response({"error": "File is not CSV type."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Decode file
-            data_set = csv_file.read().decode('UTF-8')
+            # Decode file safely (handles both UTF-8 w/ BOM and Excel Latin-1)
+            raw_data = csv_file.read()
+            try:
+                data_set = raw_data.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                data_set = raw_data.decode('latin-1')
+                
             io_string = io.StringIO(data_set)
             
             # Read CSV
@@ -78,19 +83,20 @@ class ImportClientsView(APIView):
             created_services = 0
 
             for row in reader:
-                client_name = row.get('CLIENTE', '').strip()
+                client_name = str(row.get('CLIENTE') or '').strip()
                 if not client_name:
                     continue  # Skip rows without client name
 
                 # Extract Client Data
-                region = row.get('REGION', '').strip()
-                city = row.get('CIUDAD', '').strip()
-                segment = row.get('SEGMENTO', '').strip()
-                account_manager = row.get('GERENTE DE CUENTA', '').strip()
+                region = str(row.get('REGION') or '').strip()
+                city = str(row.get('CIUDAD') or '').strip()
+                segment = str(row.get('SEGMENTO') or '').strip()
+                account_manager = str(row.get('GERENTE DE CUENTA') or '').strip()
                 
                 # We need tax_id and email. Will use dummy if empty.
                 tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"
-                email = row.get('E-MAILS', '').strip().split(';')[0].split(',')[0].strip()
+                email_raw = str(row.get('E-MAILS') or '').strip()
+                email = email_raw.split(';')[0].split(',')[0].strip() if email_raw else ""
                 if not email or '@' not in email:
                     email = "contacto@desconocido.com"
 
@@ -119,8 +125,8 @@ class ImportClientsView(APIView):
                     if changed: client.save()
 
                 # Extract Contact Data
-                contact_name = row.get('CONTACTO', '').strip()
-                phones = row.get('TELÉFONOS', '').strip()
+                contact_name = str(row.get('CONTACTO') or '').strip()
+                phones = str(row.get('TELÉFONOS') or '').strip()
                 if contact_name:
                     Contact.objects.get_or_create(
                         client=client,
@@ -132,7 +138,7 @@ class ImportClientsView(APIView):
                     )
 
                 # Extract Service Data
-                service_str = row.get('SERVICIO', '').strip()
+                service_str = str(row.get('SERVICIO') or '').strip()
                 if service_str:
                     # Find or create Service Catalog item
                     service_cat, cat_created = ServiceCatalog.objects.get_or_create(
@@ -140,15 +146,15 @@ class ImportClientsView(APIView):
                         defaults={'service_type': 'OTHER', 'base_price': 0.00}
                     )
 
-                    project_type = row.get('TIPO DE PROYECTO', '').strip()
-                    estado_str = row.get('ESTADO', '').strip().upper()
+                    project_type = str(row.get('TIPO DE PROYECTO') or '').strip()
+                    estado_str = str(row.get('ESTADO') or '').strip().upper()
                     status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
                     
                     nrc = clean_decimal(row.get('NRC'))
                     mrc = clean_decimal(row.get('MRC'))
-                    management_type = row.get('TIPO DE GESTION', '').strip()
-                    call_result = row.get('RESULTADO DE LLAMADAS', '').strip()
-                    obs = row.get('OBSERVACION', '').strip()
+                    management_type = str(row.get('TIPO DE GESTION') or '').strip()
+                    call_result = str(row.get('RESULTADO DE LLAMADAS') or '').strip()
+                    obs = str(row.get('OBSERVACION') or '').strip()
 
                     ClientService.objects.create(
                         client=client,
