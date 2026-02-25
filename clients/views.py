@@ -106,10 +106,10 @@ class ImportClientsView(APIView):
                 region = get_col(row, ['REGION', 'REGIÓN'])
                 city = get_col(row, ['CIUDAD'])
                 segment = get_col(row, ['SEGMENTO'])
-                account_manager = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])
+                account_manager = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])[:255]
                 
                 # We need tax_id and email. Will use dummy if empty.
-                tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"
+                tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"[:50]
                 email_raw = get_col(row, ['E-MAILS', 'EMAIL', 'CORREOS', 'CORREO', 'E-MAIL'])
                 email = email_raw.split(';')[0].split(',')[0].strip() if email_raw else ""
                 if not email or '@' not in email:
@@ -140,8 +140,8 @@ class ImportClientsView(APIView):
                     if changed: client.save()
 
                 # Extract Contact Data
-                contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])
-                phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])
+                contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])[:255]
+                phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])[:50]
                 if contact_name:
                     Contact.objects.get_or_create(
                         client=client,
