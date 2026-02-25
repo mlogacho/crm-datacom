@@ -4,10 +4,40 @@ import axios from 'axios';
 
 export default function ClientsList() {
     const [clients, setClients] = useState([]);
-    const [searchTerm, setSearchTerm] = useState('');
+    
+    // Filtros combinados
+    const [filters, setFilters] = useState({
+        search: '',
+        type: '',
+        status: '',
+        region: '',
+        segment: '',
+        account_manager: ''
+    });
+
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState(null);
+    const [editingClient, setEditingClient] = useState(null);
+
+    // Form state (usado para Nuevo y para Editar)
+    const initialFormState = {
+        name: '',
+        legal_name: '',
+        tax_id_type: 'RUC',
+        tax_id: '',
+        type: 'HOUSING',
+        email: '',
+        phone: '',
+        address: '',
+        region: '',
+        city: '',
+        segment: '',
+        account_manager: '',
+        is_active: true
+    };
+    const [formData, setFormData] = useState(initialFormState);
 
     useEffect(() => {
         fetchClients();
@@ -24,9 +54,14 @@ export default function ClientsList() {
                 tax_id: client.tax_id,
                 type: client.client_type,
                 status: client.is_active ? 'Activo' : 'Inactivo',
+                is_active: client.is_active,
                 email: client.email,
                 phone: client.phone,
-                address: client.address
+                address: client.address,
+                region: client.region || '',
+                city: client.city || '',
+                segment: client.segment || '',
+                account_manager: client.account_manager || ''
             }));
             setClients(mappedClients);
         } catch (error) {
@@ -34,39 +69,25 @@ export default function ClientsList() {
         }
     };
 
-    // Form state
-    const [formData, setFormData] = useState({
-        name: '',
-        legal_name: '',
-        tax_id_type: 'RUC',
-        tax_id: '',
-        type: 'HOUSING',
-        email: '',
-        phone: '',
-        address: ''
-    });
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({ 
+            ...prev, 
+            [name]: type === 'checkbox' ? checked : value 
+        }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         const isNumeric = /^\d+$/.test(formData.tax_id);
-        if (!isNumeric) {
-            alert('El RUC o Cédula debe contener solo números.');
-            return;
-        }
-
-        if (formData.tax_id_type === 'RUC' && formData.tax_id.length !== 13) {
-            alert('El RUC debe tener exactamente 13 dígitos numéricos.');
-            return;
-        }
-
-        if (formData.tax_id_type === 'CEDULA' && formData.tax_id.length !== 10) {
-            alert('La Cédula debe tener exactamente 10 dígitos numéricos.');
+        if (!isNumeric && formData.tax_id_type !== 'OTRO') {
+            alert('El documento de identidad debe contener solo números si es RUC o Cédula.');
             return;
         }
 
@@ -82,12 +103,56 @@ export default function ClientsList() {
             await axios.post('/api/clients/clients/', payload);
             fetchClients();
             setIsModalOpen(false);
-            setFormData({ name: '', legal_name: '', tax_id_type: 'RUC', tax_id: '', type: 'HOUSING', email: '', phone: '', address: '' });
+            setFormData(initialFormState);
             alert('¡Cliente registrado exitosamente!');
         } catch (error) {
             console.error('Error creating client:', error);
             const errorMsg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-            alert(`Error al crear el cliente: ${errorMsg}\nPor favor, verifique los datos o si el documento está duplicado.`);
+            alert(`Error al crear el cliente: ${errorMsg}`);
+        }
+    };
+
+    const openEditModal = (client) => {
+        setEditingClient(client);
+        setFormData({
+            ...initialFormState,
+            name: client.name,
+            legal_name: client.legal_name || '',
+            tax_id_type: 'RUC', // fallback genérico
+            tax_id: client.tax_id,
+            type: client.type,
+            email: client.email,
+            phone: client.phone || '',
+            address: client.address || '',
+            region: client.region || '',
+            city: client.city || '',
+            segment: client.segment || '',
+            account_manager: client.account_manager || '',
+            is_active: client.is_active
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                ...formData,
+                client_type: formData.type,
+                name: formData.name.trim() === '' ? formData.legal_name : formData.name
+            };
+            delete payload.type;
+            delete payload.tax_id_type;
+
+            await axios.patch(`/api/clients/clients/${editingClient.id}/`, payload);
+            fetchClients();
+            setIsEditModalOpen(false);
+            setEditingClient(null);
+            setFormData(initialFormState);
+            alert('¡Cliente actualizado exitosamente!');
+        } catch (error) {
+            console.error('Error updating client:', error);
+            alert('Error al actualizar el cliente.');
         }
     };
 
@@ -110,11 +175,11 @@ export default function ClientsList() {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', importFile);
+        const importFormData = new FormData();
+        importFormData.append('file', importFile);
 
         try {
-            const response = await axios.post('/api/clients/import/', formData, {
+            const response = await axios.post('/api/clients/import/', importFormData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -122,7 +187,7 @@ export default function ClientsList() {
             fetchClients();
             setIsImportModalOpen(false);
             setImportFile(null);
-            alert(`¡Importación exitosa!\nClientes importados: ${response.data.clients_imported}\nServicios migrados: ${response.data.services_imported}`);
+            alert(`¡Importación exitosa!\nClientes procesados/creados: ${response.data.clients_imported}\nServicios migrados: ${response.data.services_imported}`);
         } catch (error) {
             console.error('Error importing clients:', error);
             const errorMsg = error.response?.data?.error ? error.response.data.error : error.message;
@@ -148,11 +213,114 @@ export default function ClientsList() {
         );
     };
 
-    const filteredClients = clients.filter(client =>
-        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.legal_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.tax_id.includes(searchTerm)
+    // Extraer valores únicos para los dropdowns de filtros
+    const uniqueRegions = [...new Set(clients.map(c => c.region).filter(Boolean))];
+    const uniqueSegments = [...new Set(clients.map(c => c.segment).filter(Boolean))];
+    const uniqueManagers = [...new Set(clients.map(c => c.account_manager).filter(Boolean))];
+
+    const filteredClients = clients.filter(client => {
+        const matchSearch = String(client.name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+                            String(client.legal_name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+                            String(client.email || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+                            String(client.tax_id || '').includes(filters.search);
+            
+        const matchType = filters.type === '' || client.type === filters.type;
+        const matchStatus = filters.status === '' || client.status === filters.status;
+        const matchRegion = filters.region === '' || client.region === filters.region;
+        const matchSegment = filters.segment === '' || client.segment === filters.segment;
+        const matchManager = filters.account_manager === '' || client.account_manager === filters.account_manager;
+
+        return matchSearch && matchType && matchStatus && matchRegion && matchSegment && matchManager;
+    });
+
+    const FormFields = () => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4 md:col-span-2">
+                <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Información Fiscal</h4>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Documento <span className="text-red-500">*</span></label>
+                <div className="mt-1 flex gap-2">
+                    <select name="tax_id_type" value={formData.tax_id_type} onChange={handleInputChange} className="input-field bg-white w-1/3">
+                        <option value="RUC">RUC</option>
+                        <option value="CEDULA">Cédula</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                    <input type="text" name="tax_id" required value={formData.tax_id} onChange={handleInputChange} className="input-field w-2/3" placeholder="ID" />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Tipo de Cliente <span className="text-red-500">*</span></label>
+                <div className="mt-1">
+                    <select name="type" value={formData.type} onChange={handleInputChange} className="input-field bg-white">
+                        <option value="HOUSING">Housing / Colocation</option>
+                        <option value="TELECOM">Telecomunicaciones</option>
+                        <option value="APP_DEV">Desarrollo de Apps</option>
+                        <option value="OTHER">Otro</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium leading-6 text-slate-900">Razón Social <span className="text-red-500">*</span></label>
+                <input type="text" name="legal_name" required value={formData.legal_name} onChange={handleInputChange} className="mt-1 input-field" placeholder="Nombre legal de la compañía" />
+            </div>
+
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium leading-6 text-slate-900">Nombre Comercial</label>
+                <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="mt-1 input-field" placeholder="Nombre con el que se le conoce" />
+            </div>
+
+            <div className="space-y-4 md:col-span-2 mt-2">
+                <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Datos Operativos (Migración)</h4>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Región</label>
+                <input type="text" name="region" value={formData.region} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. R1, R2, Costa, Sierra" />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Ciudad</label>
+                <input type="text" name="city" value={formData.city} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. Quito, Guayaquil" />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Segmento</label>
+                <input type="text" name="segment" value={formData.segment} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. BANCA, PETRÓLEO, GOBIERNO" />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Gerente de Cuenta</label>
+                <input type="text" name="account_manager" value={formData.account_manager} onChange={handleInputChange} className="mt-1 input-field" placeholder="Nombre del Asignado" />
+            </div>
+
+            <div className="col-span-1 md:col-span-2 flex items-center gap-2 mt-2">
+                <input type="checkbox" id="is_active" name="is_active" checked={formData.is_active} onChange={handleInputChange} className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500" />
+                <label htmlFor="is_active" className="text-sm font-medium text-slate-900">Cliente Activo en el Sistema</label>
+            </div>
+
+            <div className="space-y-4 md:col-span-2 mt-2">
+                <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Contacto Básico</h4>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Correo Electrónico <span className="text-red-500">*</span></label>
+                <input type="email" name="email" required value={formData.email} onChange={handleInputChange} className="mt-1 input-field" placeholder="contacto@empresa.com" />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Teléfonos</label>
+                <input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="mt-1 input-field" placeholder="Varios números separados por coma" />
+            </div>
+
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium leading-6 text-slate-900">Dirección Física</label>
+                <input type="text" name="address" value={formData.address} onChange={handleInputChange} className="mt-1 input-field" placeholder="Dirección completa" />
+            </div>
+        </div>
     );
 
     return (
@@ -172,7 +340,10 @@ export default function ClientsList() {
                     </button>
                     <button
                         className="btn-primary flex items-center gap-2"
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={() => {
+                            setFormData(initialFormState);
+                            setIsModalOpen(true);
+                        }}
                     >
                         <Plus className="w-4 h-4" />
                         <span>Nuevo Cliente</span>
@@ -181,23 +352,62 @@ export default function ClientsList() {
             </div>
 
             <div className="card mb-6">
-                <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                    <div className="relative w-full sm:max-w-xs">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-slate-400" />
+                {/* Filtros Avanzados Bar */}
+                <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                        <div className="lg:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Buscar (Nombre, Correo, RUC)</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-slate-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    name="search"
+                                    className="input-field pl-9 text-sm py-2"
+                                    placeholder="Buscar clientes..."
+                                    value={filters.search}
+                                    onChange={handleFilterChange}
+                                />
+                            </div>
                         </div>
-                        <input
-                            type="text"
-                            className="input-field pl-10"
-                            placeholder="Buscar clientes por nombre o correo..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                        
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
+                            <select name="type" value={filters.type} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                <option value="HOUSING">Housing</option>
+                                <option value="TELECOM">Telecom</option>
+                                <option value="APP_DEV">App Dev</option>
+                                <option value="OTHER">Otro</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Estado</label>
+                            <select name="status" value={filters.status} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                <option value="Activo">Activos</option>
+                                <option value="Inactivo">Inactivos</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Segmento</label>
+                            <select name="segment" value={filters.segment} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                {uniqueSegments.map(seg => <option key={seg} value={seg}>{seg}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Gerente de Cuenta</label>
+                            <select name="account_manager" value={filters.account_manager} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                {uniqueManagers.map(mgr => <option key={mgr} value={mgr}>{mgr}</option>)}
+                            </select>
+                        </div>
                     </div>
-                    <button className="btn-outline flex items-center gap-2 w-full sm:w-auto mt-0">
-                        <Filter className="w-4 h-4" />
-                        <span>Filtros</span>
-                    </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -205,8 +415,8 @@ export default function ClientsList() {
                         <thead className="bg-slate-50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Cliente</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo & Estado</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Detalles Operativos</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto Principal</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
@@ -221,22 +431,34 @@ export default function ClientsList() {
                                             </div>
                                             <div className="ml-4">
                                                 <div className="text-sm font-bold text-slate-900">{client.name}</div>
-                                                <div className="text-sm text-slate-500">{client.legal_name}</div>
+                                                <div className="text-xs text-slate-500">{client.legal_name || client.tax_id}</div>
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-slate-900">{client.type}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-slate-900 mb-1">{client.type}</div>
                                         {getStatusBadge(client.status)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {client.account_manager || 'N/A'}</div>
+                                        <div className="text-xs text-slate-500 mt-1">{client.region} {client.region && client.city ? '-' : ''} {client.city}</div>
+                                        <div className="text-xs text-slate-500">{client.segment}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-slate-900">{client.email}</div>
-                                        <div className="text-sm text-slate-500">{client.phone}</div>
+                                        <div className="text-xs text-slate-500 mt-1 truncate max-w-[200px]">{client.phone}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex items-center justify-end gap-3">
+                                            <button
+                                                onClick={() => openEditModal(client)}
+                                                className="text-slate-400 hover:text-blue-500 transition-colors"
+                                                title="Editar Cliente"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                </svg>
+                                            </button>
                                             <button
                                                 onClick={() => handleDelete(client.id)}
                                                 className="text-slate-400 hover:text-red-500 transition-colors"
@@ -244,13 +466,17 @@ export default function ClientsList() {
                                             >
                                                 <Trash2 className="w-5 h-5" />
                                             </button>
-                                            <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                                                <MoreVertical className="w-5 h-5" />
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
                             ))}
+                            {filteredClients.length === 0 && (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-slate-500">
+                                        No se encontraron clientes que coincidan con los filtros.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -259,21 +485,8 @@ export default function ClientsList() {
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-slate-700">
-                                Mostrando <span className="font-medium">{filteredClients.length > 0 ? 1 : 0}</span> a <span className="font-medium">{filteredClients.length}</span> de <span className="font-medium">{filteredClients.length}</span> resultados
+                                Mostrando <span className="font-medium">{filteredClients.length > 0 ? 1 : 0}</span> a <span className="font-medium">{filteredClients.length}</span> de <span className="font-medium">{filteredClients.length}</span> resultados filtrados
                             </p>
-                        </div>
-                        <div>
-                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                <button className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
-                                    Anterior
-                                </button>
-                                <button className="relative inline-flex items-center px-4 py-2 border border-slate-300 bg-white text-sm font-medium text-primary-600 hover:bg-slate-50">
-                                    1
-                                </button>
-                                <button className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50">
-                                    Siguiente
-                                </button>
-                            </nav>
                         </div>
                     </div>
                 </div>
@@ -282,10 +495,10 @@ export default function ClientsList() {
             {/* Modal de Nuevo Cliente */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
 
-                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up">
-                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-y-auto max-h-[90vh] animate-slide-up">
+                        <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
                             <h3 className="text-lg font-bold text-slate-900">Registrar Nuevo Cliente</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                                 <span className="sr-only">Cerrar</span>
@@ -296,81 +509,50 @@ export default function ClientsList() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Datos Empresariales */}
-                                <div className="space-y-4 md:col-span-2">
-                                    <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Información Fiscal</h4>
-                                </div>
+                            <FormFields />
 
-                                <div>
-                                    <label htmlFor="tax_id" className="block text-sm font-medium leading-6 text-slate-900">Documento de Identidad <span className="text-red-500">*</span></label>
-                                    <div className="mt-1 flex gap-2">
-                                        <select name="tax_id_type" value={formData.tax_id_type} onChange={handleInputChange} className="input-field bg-white w-1/3">
-                                            <option value="RUC">RUC</option>
-                                            <option value="CEDULA">Cédula</option>
-                                        </select>
-                                        <input type="text" name="tax_id" id="tax_id" required value={formData.tax_id} onChange={handleInputChange} className="input-field w-2/3" placeholder={formData.tax_id_type === 'RUC' ? "13 dígitos" : "10 dígitos"} />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label htmlFor="type" className="block text-sm font-medium leading-6 text-slate-900">Categoría de Servicio <span className="text-red-500">*</span></label>
-                                    <div className="mt-1">
-                                        <select name="type" id="type" value={formData.type} onChange={handleInputChange} className="input-field bg-white">
-                                            <option value="HOUSING">Housing / Colocation</option>
-                                            <option value="TELECOM">Telecomunicaciones</option>
-                                            <option value="APP_DEV">Desarrollo de Apps</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label htmlFor="legal_name" className="block text-sm font-medium leading-6 text-slate-900">Razón Social <span className="text-red-500">*</span></label>
-                                    <div className="mt-1">
-                                        <input type="text" name="legal_name" id="legal_name" required value={formData.legal_name} onChange={handleInputChange} className="input-field" placeholder="Nombre legal de la compañía" />
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label htmlFor="name" className="block text-sm font-medium leading-6 text-slate-900">Nombre Comercial</label>
-                                    <div className="mt-1">
-                                        <input type="text" name="name" id="name" value={formData.name} onChange={handleInputChange} className="input-field" placeholder="Nombre con el que se le conoce" />
-                                    </div>
-                                </div>
-
-                                {/* Datos de Contacto */}
-                                <div className="space-y-4 md:col-span-2 mt-4">
-                                    <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Datos de Contacto</h4>
-                                </div>
-
-                                <div>
-                                    <label htmlFor="email" className="block text-sm font-medium leading-6 text-slate-900">Correo Electrónico <span className="text-red-500">*</span></label>
-                                    <div className="mt-1">
-                                        <input type="email" name="email" id="email" required value={formData.email} onChange={handleInputChange} className="input-field" placeholder="contacto@empresa.com" />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label htmlFor="phone" className="block text-sm font-medium leading-6 text-slate-900">Teléfono</label>
-                                    <div className="mt-1">
-                                        <input type="tel" name="phone" id="phone" value={formData.phone} onChange={handleInputChange} className="input-field" placeholder="+593 99 999 9999" />
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label htmlFor="address" className="block text-sm font-medium leading-6 text-slate-900">Dirección Física</label>
-                                    <div className="mt-1">
-                                        <input type="text" name="address" id="address" value={formData.address} onChange={handleInputChange} className="input-field" placeholder="Calle principal y secundaria, Ciudad" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex items-center justify-end gap-x-4">
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
                                     Cancelar
                                 </button>
-                                <button type="submit" className="btn-primary">
-                                    Registrar Cliente
+                                <button type="submit" className="btn-primary space-x-2">
+                                    <Plus className="w-4 h-4 inline" />
+                                    <span>Registrar Cliente</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            
+            {/* Modal de Editar Cliente */}
+            {isEditModalOpen && editingClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
+
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-y-auto max-h-[90vh] animate-slide-up">
+                        <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-slate-900">Actualizar Expediente del Cliente</h3>
+                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleEditSubmit} className="p-6">
+                            <FormFields />
+
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
+                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn-primary space-x-2 text-white bg-blue-600 hover:bg-blue-700">
+                                    <svg className="w-4 h-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span>Guardar Cambios</span>
                                 </button>
                             </div>
                         </form>

@@ -14,7 +14,13 @@ export default function ServicesList() {
     const [clients, setClients] = useState([]);
     const [catalogs, setCatalogs] = useState([]);
 
-    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({
+        search: '',
+        client_name: '',
+        status: '',
+        account_manager: '',
+    });
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingService, setEditingService] = useState(null);
@@ -60,6 +66,11 @@ export default function ServicesList() {
         } catch (error) {
             console.error('Error fetching assigned services:', error);
         }
+    };
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
     };
 
     const handleInputChange = (e) => {
@@ -148,6 +159,25 @@ export default function ServicesList() {
         return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{labelText}</span>;
     };
 
+    const uniqueManagers = [...new Set(clients.map(c => c.account_manager).filter(Boolean))];
+    const uniqueClients = [...new Set(clients.map(c => c.name).filter(Boolean))].sort();
+
+    const filteredServices = services.filter((service) => {
+        const catAssigned = catalogs.find(c => c.id === service.service);
+        const clientAssigned = clients.find(c => c.id === service.client);
+
+        const serviceName = catAssigned ? catAssigned.name.toLowerCase() : '';
+        const clientName = clientAssigned ? clientAssigned.name.toLowerCase() : '';
+        const managerName = clientAssigned && clientAssigned.account_manager ? clientAssigned.account_manager : '';
+
+        const matchSearch = serviceName.includes(filters.search.toLowerCase()) || clientName.includes(filters.search.toLowerCase());
+        const matchStatus = filters.status === '' || service.status === filters.status;
+        const matchAccountManager = filters.account_manager === '' || managerName === filters.account_manager;
+        const matchClient = filters.client_name === '' || (clientAssigned && clientAssigned.name === filters.client_name);
+
+        return matchSearch && matchStatus && matchAccountManager && matchClient;
+    });
+
     return (
         <div className="animate-fade-in">
             <div className="sm:flex sm:items-center sm:justify-between mb-6">
@@ -167,18 +197,59 @@ export default function ServicesList() {
             </div>
 
             <div className="card mb-6">
-                <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                    <div className="relative w-full sm:max-w-xs">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-slate-400" />
+                {/* Filtros Avanzados Bar */}
+                <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div className="lg:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Buscar Servicio o Razón Social</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-slate-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    name="search"
+                                    className="input-field pl-9 text-sm py-2"
+                                    placeholder="Buscar servicios..."
+                                    value={filters.search}
+                                    onChange={handleFilterChange}
+                                />
+                            </div>
                         </div>
-                        <input
-                            type="text"
-                            className="input-field pl-10"
-                            placeholder="Buscar servicios..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Cliente</label>
+                            <select name="client_name" value={filters.client_name} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                {uniqueClients.map(cName => <option key={cName} value={cName}>{cName}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Gerente de Cuenta</label>
+                            <select name="account_manager" value={filters.account_manager} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                {uniqueManagers.map(mgr => <option key={mgr} value={mgr}>{mgr}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Estado en Embudo</label>
+                            <select name="status" value={filters.status} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
+                                <option value="">Todos</option>
+                                <option value="PROSPECTING">Prospección</option>
+                                <option value="CONTACTED">Contactado</option>
+                                <option value="FIRST_MEETING">Primera Cita</option>
+                                <option value="OFFERED">Ofertado</option>
+                                <option value="FOLLOW_UP">Seguimiento</option>
+                                <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                <option value="DEMO">Demo</option>
+                                <option value="CONTRACT_SIGNED">Firma de Contrato</option>
+                                <option value="BACKLOG">Backlog</option>
+                                <option value="INSTALLED">Instalado (Activo)</option>
+                                <option value="LOST">Negocio Perdido</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -189,19 +260,20 @@ export default function ServicesList() {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Servicio & Detalles</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Monto / Precio</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Gerente de Cuenta</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha Inicio</th>
                                 <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
-                            {services.length === 0 ? (
+                            {filteredServices.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-4 text-center text-sm text-slate-500">
-                                        No hay servicios asignados aún.
+                                    <td colSpan="6" className="px-6 py-8 text-center text-sm text-slate-500">
+                                        No se encontraron servicios que coincidan con los filtros.
                                     </td>
                                 </tr>
                             ) : null}
-                            {services.map((service) => {
+                            {filteredServices.map((service) => {
                                 const catAssigned = catalogs.find(c => c.id === service.service);
                                 const clientAssigned = clients.find(c => c.id === service.client);
                                 const config = catAssigned ? (catalogIcons[catAssigned.service_type] || catalogIcons['OTHER']) : catalogIcons['OTHER'];
@@ -225,6 +297,9 @@ export default function ServicesList() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
                                             ${service.agreed_price}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                                            {clientAssigned && clientAssigned.account_manager ? clientAssigned.account_manager : <span className="text-slate-400 italic">No asignado</span>}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                                             {service.start_date}
@@ -258,7 +333,7 @@ export default function ServicesList() {
             {/* Modal de Asignación de Servicio */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -317,7 +392,7 @@ export default function ServicesList() {
                                 </div>
                             </div>
 
-                            <div className="mt-8 flex items-center justify-end gap-x-4">
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
                                     Cancelar
                                 </button>
@@ -333,7 +408,7 @@ export default function ServicesList() {
             {/* Modal de EDICIÓN de Estado y Monto */}
             {isEditModalOpen && editingService && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -383,7 +458,7 @@ export default function ServicesList() {
                                 </div>
                             </div>
 
-                            <div className="mt-8 flex items-center justify-end gap-x-4">
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
                                 <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
                                     Cancelar
                                 </button>
