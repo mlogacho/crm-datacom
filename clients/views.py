@@ -40,12 +40,27 @@ class ImportClientsView(APIView):
                 
             io_string = io.StringIO(data_set)
             
+            # Detect delimiter (Excel en español suele usar punto y coma)
+            sample = io_string.readline()
+            io_string.seek(0)
+            delimiter_char = ';' if sample.count(';') > sample.count(',') else ','
+
             # Read CSV
-            reader = csv.DictReader(io_string, delimiter=',')
+            reader = csv.DictReader(io_string, delimiter=delimiter_char)
             
             # Normalize headers
-            headers = [h.strip().upper() for h in reader.fieldnames]
+            headers = [h.strip().upper() for h in (reader.fieldnames or [])]
             reader.fieldnames = headers
+
+            def get_col(row_dict, possible_keys):
+                for k in possible_keys:
+                    if k in row_dict:
+                        return str(row_dict[k] or '').strip()
+                # Check for substring matches in keys just in case
+                for key_in_dict in row_dict.keys():
+                    if key_in_dict and any(pk in key_in_dict for pk in possible_keys):
+                         return str(row_dict[key_in_dict] or '').strip()
+                return ''
 
             STATUS_MAPPING = {
                 'PROSPECCIÓN': 'PROSPECTING',
@@ -83,19 +98,19 @@ class ImportClientsView(APIView):
             created_services = 0
 
             for row in reader:
-                client_name = str(row.get('CLIENTE') or '').strip()
+                client_name = get_col(row, ['CLIENTE', 'CLIENTES', 'NOMBRE'])
                 if not client_name:
                     continue  # Skip rows without client name
 
                 # Extract Client Data
-                region = str(row.get('REGION') or '').strip()
-                city = str(row.get('CIUDAD') or '').strip()
-                segment = str(row.get('SEGMENTO') or '').strip()
-                account_manager = str(row.get('GERENTE DE CUENTA') or '').strip()
+                region = get_col(row, ['REGION', 'REGIÓN'])
+                city = get_col(row, ['CIUDAD'])
+                segment = get_col(row, ['SEGMENTO'])
+                account_manager = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])
                 
                 # We need tax_id and email. Will use dummy if empty.
                 tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"
-                email_raw = str(row.get('E-MAILS') or '').strip()
+                email_raw = get_col(row, ['E-MAILS', 'EMAIL', 'CORREOS', 'CORREO', 'E-MAIL'])
                 email = email_raw.split(';')[0].split(',')[0].strip() if email_raw else ""
                 if not email or '@' not in email:
                     email = "contacto@desconocido.com"
@@ -125,8 +140,8 @@ class ImportClientsView(APIView):
                     if changed: client.save()
 
                 # Extract Contact Data
-                contact_name = str(row.get('CONTACTO') or '').strip()
-                phones = str(row.get('TELÉFONOS') or '').strip()
+                contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])
+                phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])
                 if contact_name:
                     Contact.objects.get_or_create(
                         client=client,
@@ -138,7 +153,7 @@ class ImportClientsView(APIView):
                     )
 
                 # Extract Service Data
-                service_str = str(row.get('SERVICIO') or '').strip()
+                service_str = get_col(row, ['SERVICIO', 'SERVICIOS', 'P&S', 'PRODUCTO'])
                 if service_str:
                     # Find or create Service Catalog item
                     service_cat, cat_created = ServiceCatalog.objects.get_or_create(
@@ -146,15 +161,15 @@ class ImportClientsView(APIView):
                         defaults={'service_type': 'OTHER', 'base_price': 0.00}
                     )
 
-                    project_type = str(row.get('TIPO DE PROYECTO') or '').strip()
-                    estado_str = str(row.get('ESTADO') or '').strip().upper()
+                    project_type = get_col(row, ['TIPO DE PROYECTO', 'PROYECTO'])
+                    estado_str = get_col(row, ['ESTADO']).upper()
                     service_status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
                     
-                    nrc = clean_decimal(row.get('NRC'))
-                    mrc = clean_decimal(row.get('MRC'))
-                    management_type = str(row.get('TIPO DE GESTION') or '').strip()
-                    call_result = str(row.get('RESULTADO DE LLAMADAS') or '').strip()
-                    obs = str(row.get('OBSERVACION') or '').strip()
+                    nrc = clean_decimal(get_col(row, ['NRC']))
+                    mrc = clean_decimal(get_col(row, ['MRC']))
+                    management_type = get_col(row, ['TIPO DE GESTION', 'TIPO DE GESTIÓN', 'GESTION'])
+                    call_result = get_col(row, ['RESULTADO DE LLAMADAS', 'RESULTADO', 'RESULTADOS'])
+                    obs = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
 
                     ClientService.objects.create(
                         client=client,
