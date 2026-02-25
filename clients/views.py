@@ -148,7 +148,7 @@ class ImportClientsView(APIView):
 
                     project_type = str(row.get('TIPO DE PROYECTO') or '').strip()
                     estado_str = str(row.get('ESTADO') or '').strip().upper()
-                    status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
+                    service_status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
                     
                     nrc = clean_decimal(row.get('NRC'))
                     mrc = clean_decimal(row.get('MRC'))
@@ -159,7 +159,7 @@ class ImportClientsView(APIView):
                     ClientService.objects.create(
                         client=client,
                         service=service_cat,
-                        status=status,
+                        status=service_status,
                         agreed_price=mrc,
                         nrc=nrc,
                         project_type=project_type,
