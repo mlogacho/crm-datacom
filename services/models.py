@@ -11,6 +11,7 @@ class ServiceCatalog(models.Model):
     name = models.CharField(max_length=255, verbose_name="Nombre del Servicio")
     description = models.TextField(verbose_name="Descripción", blank=True, null=True)
     service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.OTHER)
+    base_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Base", default=0.00)
     base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Base", default=0.00)
 
     def __str__(self):

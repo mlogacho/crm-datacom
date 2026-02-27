@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Users, Server, AlertCircle, DollarSign, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -40,26 +41,26 @@ export default function Dashboard() {
                     { ...prev[3], value: formattedRevenue }
                 ]);
 
-                // Prepare Chart Data: Revenue per Client (Top 5)
-                const revenueByClient = {};
+                // Prepare Chart Data: Revenue per Account Manager (Top 5)
+                const revenueByManager = {};
                 activeServices.forEach(service => {
                     const client = clientsList.find(c => c.id === service.client);
-                    const clientName = client ? client.name : `Cliente #${service.client}`;
+                    const managerName = (client && client.account_manager) ? client.account_manager : 'Sin Asignar';
                     const price = parseFloat(service.agreed_price || 0);
 
-                    if (!revenueByClient[clientName]) {
-                        revenueByClient[clientName] = 0;
+                    if (!revenueByManager[managerName]) {
+                        revenueByManager[managerName] = 0;
                     }
-                    revenueByClient[clientName] += price;
+                    revenueByManager[managerName] += price;
                 });
 
-                const formattedChartData = Object.keys(revenueByClient)
+                const formattedChartData = Object.keys(revenueByManager)
                     .map(name => ({
                         name: name,
-                        ingresos: revenueByClient[name]
+                        ingresos: revenueByManager[name]
                     }))
                     .sort((a, b) => b.ingresos - a.ingresos)
-                    .slice(0, 5); // Top 5 clients by revenue
+                    .slice(0, 5); // Top 5 managers by revenue
 
                 setChartData(formattedChartData);
 
@@ -101,29 +102,33 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-                {stats.map((item) => (
-                    <div key={item.name} className="card p-6 flex flex-col hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="p-2 bg-primary-50 text-primary-600 rounded-lg">
-                                <item.icon className="w-6 h-6" />
+                {stats.map((item) => {
+                    const CardComponent = item.name === 'Servicios Activos' ? Link : 'div';
+                    const cardProps = item.name === 'Servicios Activos' ? { to: '/catalog' } : {};
+
+                    return (
+                        <CardComponent key={item.name} {...cardProps} className={`card p-6 flex flex-col hover:shadow-md transition-shadow ${item.name === 'Servicios Activos' ? 'cursor-pointer hover:border-primary-300' : ''}`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                                    <item.icon className="w-6 h-6" />
+                                </div>
+                                <div className={`flex items-center text-sm font-medium ${item.changeType === 'increase' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {item.changeType === 'increase' ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+                                    {item.change}
+                                </div>
                             </div>
-                            <div className={`flex items-center text-sm font-medium ${item.changeType === 'increase' ? 'text-emerald-600' : 'text-red-600'
-                                }`}>
-                                {item.changeType === 'increase' ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
-                                {item.change}
+                            <div>
+                                <p className="text-sm font-medium text-slate-500">{item.name}</p>
+                                <p className="text-3xl font-bold text-slate-900 mt-1">{item.value}</p>
                             </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-slate-500">{item.name}</p>
-                            <p className="text-3xl font-bold text-slate-900 mt-1">{item.value}</p>
-                        </div>
-                    </div>
-                ))}
+                        </CardComponent>
+                    );
+                })}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="card col-span-1 lg:col-span-2 p-6">
-                    <h2 className="text-lg font-bold text-slate-900 mb-4">Ingresos Recientes por Cliente (Top 5)</h2>
+                    <h2 className="text-lg font-bold text-slate-900 mb-4">Ingresos Recientes por Gerente de Cuenta (Top 5)</h2>
                     <div className="h-72 w-full">
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">

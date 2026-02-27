@@ -1,0 +1,26 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos de caché y compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de datos local
+db.sqlite3
+
+# Logs
+*.log
+server.log
+
+# Frontend (Node.js)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.npm/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

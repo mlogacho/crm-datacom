@@ -1,10 +1,14 @@
 # Guía de Despliegue - CRM DATACOM (Debian)
 
 ## 1. Requisitos Previos en el Servidor Debian
-Actualiza el sistema e instala los requerimientos esenciales para base de datos y proxies web:
+Actualiza el sistema e instala los requerimientos esenciales. Para evitar el típico conflicto de dependencias de Debian con `npm`, instalaremos Node.js desde su repositorio oficial seguro:
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install python3 python3-venv python3-pip postgresql postgresql-contrib nginx nodejs npm redis-server -y
+sudo apt install python3 python3-venv python3-pip postgresql postgresql-contrib nginx redis-server curl -y
+
+# Instalar Node.js (que ya incluye npm automáticament) sin conflictos:
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
 
 ## 2. Configurar PostgreSQL (Producción)
@@ -30,8 +34,8 @@ GRANT ALL PRIVILEGES ON DATABASE datacom_crm TO datacom_user;
    cd /var/www/crm_datacom
    python3 -m venv venv
    source venv/bin/activate
-   pip install -r requirements.txt
-   pip install gunicorn
+   pip install -r requirements.txt --break-system-packages
+   pip install gunicorn --break-system-packages
    ```
 3. Crea un archivo oculto llamadado `.env` en la raíz donde está `manage.py`:
    ```ini
@@ -43,9 +47,9 @@ GRANT ALL PRIVILEGES ON DATABASE datacom_crm TO datacom_user;
    ```
 4. Aplica las migraciones de Django directamente a tu servidor PostgreSQL:
    ```bash
-   python manage.py migrate
-   python manage.py createsuperuser
-   python manage.py collectstatic
+   python3 manage.py migrate
+   python3 manage.py createsuperuser
+   python3 manage.py collectstatic
    ```
 
 ## 4. Demonizar Gunicorn
