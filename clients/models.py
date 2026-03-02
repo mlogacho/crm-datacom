@@ -61,6 +61,8 @@ class ClientStatusHistory(models.Model):
     status = models.CharField(max_length=30, choices=ProspectStatus.choices, verbose_name="Estado")
     reason = models.TextField(verbose_name="Razón")
     evidence = models.FileField(upload_to='prospect_evidence/', blank=True, null=True, verbose_name="Evidencia")
+    nrc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="NRC")
+    mrc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="MRC")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
 
     def __str__(self):

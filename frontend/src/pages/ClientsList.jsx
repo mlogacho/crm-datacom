@@ -22,7 +22,7 @@ export default function ClientsList() {
     const [editingClient, setEditingClient] = useState(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [statusClient, setStatusClient] = useState(null);
-    const [statusFormData, setStatusFormData] = useState({ state: 'FIRST_MEETING', reason: '', evidence: null });
+    const [statusFormData, setStatusFormData] = useState({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '' });
 
     // Form state (usado para Nuevo y para Editar)
     const initialFormState = {
@@ -185,11 +185,23 @@ export default function ClientsList() {
 
     const handleStatusSubmit = async (e) => {
         e.preventDefault();
+
+        if (statusFormData.state === 'OFFERED') {
+            if (!statusFormData.nrc && !statusFormData.mrc) {
+                alert('Al seleccionar el estado "OFERTADO", debes ingresar obligatoriamente al menos el valor de NRC o MRC.');
+                return;
+            }
+        }
+
         const data = new FormData();
         data.append('status', statusFormData.state);
         data.append('reason', statusFormData.reason);
         if (statusFormData.evidence) {
             data.append('evidence', statusFormData.evidence);
+        }
+        if (statusFormData.state === 'OFFERED') {
+            if (statusFormData.nrc) data.append('nrc', statusFormData.nrc);
+            if (statusFormData.mrc) data.append('mrc', statusFormData.mrc);
         }
 
         try {
@@ -199,7 +211,7 @@ export default function ClientsList() {
             fetchClients();
             setIsStatusModalOpen(false);
             setStatusClient(null);
-            setStatusFormData({ state: 'FIRST_MEETING', reason: '', evidence: null });
+            setStatusFormData({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '' });
             alert('¡Estado de prospecto actualizado!');
         } catch (error) {
             console.error('Error updating prospect status:', error);
@@ -720,6 +732,32 @@ export default function ClientsList() {
                                         <option value="LOST_DEAL">Negocio Perdido</option>
                                     </select>
                                 </div>
+
+                                {statusFormData.state === 'OFFERED' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                                        <div className="md:col-span-2">
+                                            <p className="text-xs font-semibold text-blue-800 mb-2">Ingresa al menos uno de los valores financieros para la oferta:</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">NRC ($)</label>
+                                            <input type="number" step="0.01" min="0" name="nrc" value={statusFormData.nrc} onChange={handleStatusFormChange} className="mt-1 input-field" placeholder="0.00" />
+                                            <p className="text-[10px] text-slate-500 mt-1">Non Recurring Charge</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">MRC ($)</label>
+                                            <input type="number" step="0.01" min="0" name="mrc" value={statusFormData.mrc} onChange={handleStatusFormChange} className="mt-1 input-field" placeholder="0.00" />
+                                            <p className="text-[10px] text-slate-500 mt-1">Monthly Recurring Charge</p>
+                                        </div>
+                                        {statusFormData.mrc && (
+                                            <div className="md:col-span-2 mt-2 p-3 bg-white border border-slate-200 rounded text-center">
+                                                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Valor Anual Proyectado (MRC x 12):</span>
+                                                <div className="text-lg font-bold text-emerald-600 mt-1">
+                                                    ${(parseFloat(statusFormData.mrc) * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-sm font-medium leading-6 text-slate-900">Razón / Comentarios <span className="text-red-500">*</span></label>
