@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList } from 'lucide-react';
 import axios from 'axios';
 
 export default function ClientsList() {
     const [clients, setClients] = useState([]);
-    
+
     // Filtros combinados
     const [filters, setFilters] = useState({
         search: '',
@@ -20,6 +20,9 @@ export default function ClientsList() {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState(null);
     const [editingClient, setEditingClient] = useState(null);
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [statusClient, setStatusClient] = useState(null);
+    const [statusFormData, setStatusFormData] = useState({ state: 'FIRST_MEETING', reason: '', evidence: null });
 
     // Form state (usado para Nuevo y para Editar)
     const initialFormState = {
@@ -35,7 +38,8 @@ export default function ClientsList() {
         city: '',
         segment: '',
         account_manager: '',
-        is_active: true
+        is_active: true,
+        classification: 'PROSPECT'
     };
     const [formData, setFormData] = useState(initialFormState);
 
@@ -53,6 +57,8 @@ export default function ClientsList() {
                 legal_name: client.legal_name,
                 tax_id: client.tax_id,
                 type: client.client_type,
+                classification: client.classification,
+                prospect_status: client.prospect_status,
                 status: client.is_active ? 'Activo' : 'Inactivo',
                 is_active: client.is_active,
                 email: client.email,
@@ -76,9 +82,9 @@ export default function ClientsList() {
 
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({ 
-            ...prev, 
-            [name]: type === 'checkbox' ? checked : value 
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
         }));
     };
 
@@ -128,7 +134,8 @@ export default function ClientsList() {
             city: client.city || '',
             segment: client.segment || '',
             account_manager: client.account_manager || '',
-            is_active: client.is_active
+            is_active: client.is_active,
+            classification: client.classification || 'PROSPECT'
         });
         setIsEditModalOpen(true);
     };
@@ -165,6 +172,38 @@ export default function ClientsList() {
                 console.error('Error deleting client:', error);
                 alert('Error al eliminar el cliente.');
             }
+        }
+    };
+
+    const handleStatusFormChange = (e) => {
+        const { name, value, files } = e.target;
+        setStatusFormData(prev => ({
+            ...prev,
+            [name]: files ? files[0] : value
+        }));
+    };
+
+    const handleStatusSubmit = async (e) => {
+        e.preventDefault();
+        const data = new FormData();
+        data.append('status', statusFormData.state);
+        data.append('reason', statusFormData.reason);
+        if (statusFormData.evidence) {
+            data.append('evidence', statusFormData.evidence);
+        }
+
+        try {
+            await axios.post(`/api/clients/clients/${statusClient.id}/update_prospect_status/`, data, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            fetchClients();
+            setIsStatusModalOpen(false);
+            setStatusClient(null);
+            setStatusFormData({ state: 'FIRST_MEETING', reason: '', evidence: null });
+            alert('¡Estado de prospecto actualizado!');
+        } catch (error) {
+            console.error('Error updating prospect status:', error);
+            alert('Error al actualizar el estado de prospecto.');
         }
     };
 
@@ -220,10 +259,10 @@ export default function ClientsList() {
 
     const filteredClients = clients.filter(client => {
         const matchSearch = String(client.name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
-                            String(client.legal_name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
-                            String(client.email || '').toLowerCase().includes(filters.search.toLowerCase()) ||
-                            String(client.tax_id || '').includes(filters.search);
-            
+            String(client.legal_name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+            String(client.email || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+            String(client.tax_id || '').includes(filters.search);
+
         const matchType = filters.type === '' || client.type === filters.type;
         const matchStatus = filters.status === '' || client.status === filters.status;
         const matchRegion = filters.region === '' || client.region === filters.region;
@@ -235,7 +274,21 @@ export default function ClientsList() {
 
     const FormFields = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4 md:col-span-2">
+            <div className="md:col-span-2 bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-sm">
+                <label className="block text-sm font-bold leading-6 text-slate-900 mb-2">Clasificación del Cliente <span className="text-red-500">*</span></label>
+                <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="classification" value="PROSPECT" checked={formData.classification === 'PROSPECT'} onChange={handleInputChange} className="w-4 h-4 text-primary-600 border-slate-300 focus:ring-primary-500" />
+                        <span className="text-sm font-medium text-slate-700">Prospecto</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="classification" value="ACTIVE" checked={formData.classification === 'ACTIVE'} onChange={handleInputChange} className="w-4 h-4 text-primary-600 border-slate-300 focus:ring-primary-500" />
+                        <span className="text-sm font-medium text-slate-700">Cliente Activo</span>
+                    </label>
+                </div>
+            </div>
+
+            <div className="space-y-4 md:col-span-2 mt-2">
                 <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Información Fiscal</h4>
             </div>
 
@@ -281,7 +334,7 @@ export default function ClientsList() {
                 <label className="block text-sm font-medium leading-6 text-slate-900">Región</label>
                 <input type="text" name="region" value={formData.region} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. R1, R2, Costa, Sierra" />
             </div>
-            
+
             <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Ciudad</label>
                 <input type="text" name="city" value={formData.city} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. Quito, Guayaquil" />
@@ -371,7 +424,7 @@ export default function ClientsList() {
                                 />
                             </div>
                         </div>
-                        
+
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                             <select name="type" value={filters.type} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
@@ -382,7 +435,7 @@ export default function ClientsList() {
                                 <option value="OTHER">Otro</option>
                             </select>
                         </div>
-                        
+
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Estado</label>
                             <select name="status" value={filters.status} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
@@ -437,7 +490,18 @@ export default function ClientsList() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm font-medium text-slate-900 mb-1">{client.type}</div>
-                                        {getStatusBadge(client.status)}
+                                        <div className="flex flex-col gap-1 items-start">
+                                            {getStatusBadge(client.status)}
+                                            {client.classification === 'PROSPECT' ? (
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                                                    Prospecto: <span className="ml-1 font-bold">{client.prospect_status || 'NUEVO'}</span>
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                                    Cliente Activo
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {client.account_manager || 'N/A'}</div>
@@ -450,13 +514,25 @@ export default function ClientsList() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex items-center justify-end gap-3">
+                                            {client.classification === 'PROSPECT' && (
+                                                <button
+                                                    onClick={() => {
+                                                        setStatusClient(client);
+                                                        setIsStatusModalOpen(true);
+                                                    }}
+                                                    className="text-amber-500 hover:text-amber-600 transition-colors"
+                                                    title="Gestionar Estado de Prospecto"
+                                                >
+                                                    <ClipboardList className="w-5 h-5" />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => openEditModal(client)}
                                                 className="text-slate-400 hover:text-blue-500 transition-colors"
                                                 title="Editar Cliente"
                                             >
                                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                                 </svg>
                                             </button>
                                             <button
@@ -524,7 +600,7 @@ export default function ClientsList() {
                     </div>
                 </div>
             )}
-            
+
             {/* Modal de Editar Cliente */}
             {isEditModalOpen && editingClient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
@@ -606,6 +682,62 @@ export default function ClientsList() {
                                 <button type="submit" className="btn-primary flex items-center gap-2" disabled={!importFile}>
                                     <Upload className="w-4 h-4" />
                                     Iniciar Migración
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Estado de Prospecto */}
+            {isStatusModalOpen && statusClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsStatusModalOpen(false)}></div>
+
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-amber-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-amber-900">Actualizar Estado: {statusClient.name}</h3>
+                            <button onClick={() => setIsStatusModalOpen(false)} className="text-amber-400 hover:text-amber-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleStatusSubmit} className="p-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Nuevo Estado de Prospecto <span className="text-red-500">*</span></label>
+                                    <select name="state" value={statusFormData.state} onChange={handleStatusFormChange} required className="mt-1 input-field bg-white">
+                                        <option value="FIRST_MEETING">Primera Cita</option>
+                                        <option value="CONTACTED">Contactado</option>
+                                        <option value="OFFERED">Ofertado</option>
+                                        <option value="FOLLOW_UP">Seguimiento</option>
+                                        <option value="CLOSING_MEETING">Cita Cierre</option>
+                                        <option value="ADJUDICATED">Adjudicado</option>
+                                        <option value="TDR_ELABORATION">Elaboración de TDR</option>
+                                        <option value="LOST_DEAL">Negocio Perdido</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Razón / Comentarios <span className="text-red-500">*</span></label>
+                                    <textarea name="reason" value={statusFormData.reason} onChange={handleStatusFormChange} required rows="3" className="mt-1 input-field" placeholder="Describe la razón de este cambio de estado..."></textarea>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Evidencia (Opcional)</label>
+                                    <input type="file" name="evidence" onChange={handleStatusFormChange} className="mt-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
+                                </div>
+                            </div>
+
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
+                                <button type="button" onClick={() => setIsStatusModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn-primary bg-amber-600 hover:bg-amber-700 text-white">
+                                    Guardar Estado
                                 </button>
                             </div>
                         </form>

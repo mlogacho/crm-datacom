@@ -1,10 +1,11 @@
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Client, Contact
+from .models import Client, Contact, ClientStatusHistory
 from services.models import ServiceCatalog, ClientService
-from .serializers import ClientSerializer, ContactSerializer
+from .serializers import ClientSerializer, ContactSerializer, ClientStatusHistorySerializer
 import csv
 import io
 import uuid
@@ -14,6 +15,32 @@ import re
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('-created_at')
     serializer_class = ClientSerializer
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def update_prospect_status(self, request, pk=None):
+        client = self.get_object()
+        
+        status_val = request.data.get('status')
+        reason = request.data.get('reason')
+        evidence = request.FILES.get('evidence')
+        
+        if not status_val or not reason:
+            return Response({'error': 'Status and reason are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Update client status
+        client.prospect_status = status_val
+        client.save()
+        
+        # Create history record
+        history = ClientStatusHistory.objects.create(
+            client=client,
+            status=status_val,
+            reason=reason,
+            evidence=evidence
+        )
+        
+        serializer = ClientStatusHistorySerializer(history)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()

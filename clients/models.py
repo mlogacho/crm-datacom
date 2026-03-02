@@ -6,10 +6,26 @@ class ClientType(models.TextChoices):
     APP_DEV = 'APP_DEV', 'Desarrollo de Apps'
     OTHER = 'OTHER', 'Otro'
 
+class ClientClassification(models.TextChoices):
+    PROSPECT = 'PROSPECT', 'Prospecto'
+    ACTIVE = 'ACTIVE', 'Cliente Activo'
+
+class ProspectStatus(models.TextChoices):
+    FIRST_MEETING = 'FIRST_MEETING', 'Primera Cita'
+    CONTACTED = 'CONTACTED', 'Contactado'
+    OFFERED = 'OFFERED', 'Ofertado'
+    FOLLOW_UP = 'FOLLOW_UP', 'Seguimiento'
+    CLOSING_MEETING = 'CLOSING_MEETING', 'Cita Cierre'
+    ADJUDICATED = 'ADJUDICATED', 'Adjudicado'
+    TDR_ELABORATION = 'TDR_ELABORATION', 'Elaboración de TDR'
+    LOST_DEAL = 'LOST_DEAL', 'Negocio Perdido'
+
 class Client(models.Model):
     name = models.CharField(max_length=255, verbose_name="Nombre Comercial")
     legal_name = models.CharField(max_length=255, verbose_name="Razón Social", blank=True, null=True)
     tax_id = models.CharField(max_length=50, verbose_name="RUC/NIT", unique=True)
+    classification = models.CharField(max_length=20, choices=ClientClassification.choices, default=ClientClassification.PROSPECT, verbose_name="Clasificación")
+    prospect_status = models.CharField(max_length=30, choices=ProspectStatus.choices, blank=True, null=True, verbose_name="Estado de Prospecto")
     email = models.EmailField(verbose_name="Correo Principal")
     phone = models.CharField(max_length=50, verbose_name="Teléfono Principal", blank=True, null=True)
     address = models.TextField(verbose_name="Dirección", blank=True, null=True)
@@ -38,3 +54,14 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.client.name}"
+
+
+class ClientStatusHistory(models.Model):
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='status_history')
+    status = models.CharField(max_length=30, choices=ProspectStatus.choices, verbose_name="Estado")
+    reason = models.TextField(verbose_name="Razón")
+    evidence = models.FileField(upload_to='prospect_evidence/', blank=True, null=True, verbose_name="Evidencia")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
+
+    def __str__(self):
+        return f"{self.client.name} - {self.get_status_display()} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
