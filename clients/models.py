@@ -63,7 +63,8 @@ class ClientStatusHistory(models.Model):
     evidence = models.FileField(upload_to='prospect_evidence/', blank=True, null=True, verbose_name="Evidencia")
     nrc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="NRC")
     mrc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="MRC")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
+    custom_date = models.DateTimeField(null=True, blank=True, verbose_name="Fecha Reportada")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha Sistema")
 
     def __str__(self):
         return f"{self.client.name} - {self.get_status_display()} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"

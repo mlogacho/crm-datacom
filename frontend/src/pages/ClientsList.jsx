@@ -22,7 +22,11 @@ export default function ClientsList() {
     const [editingClient, setEditingClient] = useState(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [statusClient, setStatusClient] = useState(null);
-    const [statusFormData, setStatusFormData] = useState({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '' });
+    const [statusFormData, setStatusFormData] = useState({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
+
+    // History Modal State
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [historyClient, setHistoryClient] = useState(null);
 
     // Form state (usado para Nuevo y para Editar)
     const initialFormState = {
@@ -199,6 +203,9 @@ export default function ClientsList() {
         if (statusFormData.evidence) {
             data.append('evidence', statusFormData.evidence);
         }
+        if (statusFormData.custom_date) {
+            data.append('custom_date', statusFormData.custom_date);
+        }
         if (statusFormData.state === 'OFFERED') {
             if (statusFormData.nrc) data.append('nrc', statusFormData.nrc);
             if (statusFormData.mrc) data.append('mrc', statusFormData.mrc);
@@ -211,7 +218,7 @@ export default function ClientsList() {
             fetchClients();
             setIsStatusModalOpen(false);
             setStatusClient(null);
-            setStatusFormData({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '' });
+            setStatusFormData({ state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
             alert('¡Estado de prospecto actualizado!');
         } catch (error) {
             console.error('Error updating prospect status:', error);
@@ -527,16 +534,33 @@ export default function ClientsList() {
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex items-center justify-end gap-3">
                                             {client.classification === 'PROSPECT' && (
-                                                <button
-                                                    onClick={() => {
-                                                        setStatusClient(client);
-                                                        setIsStatusModalOpen(true);
-                                                    }}
-                                                    className="text-amber-500 hover:text-amber-600 transition-colors"
-                                                    title="Gestionar Estado de Prospecto"
-                                                >
-                                                    <ClipboardList className="w-5 h-5" />
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                                                            setStatusClient(client);
+                                                            setStatusFormData(prev => ({ ...prev, custom_date: localDateTime }));
+                                                            setIsStatusModalOpen(true);
+                                                        }}
+                                                        className="text-amber-500 hover:text-amber-600 transition-colors"
+                                                        title="Gestionar Estado de Prospecto"
+                                                    >
+                                                        <ClipboardList className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setHistoryClient(client);
+                                                            setIsHistoryModalOpen(true);
+                                                        }}
+                                                        className="text-indigo-500 hover:text-indigo-600 transition-colors"
+                                                        title="Ver Historial de Prospecto"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                        </svg>
+                                                    </button>
+                                                </>
                                             )}
                                             <button
                                                 onClick={() => openEditModal(client)}
@@ -720,6 +744,11 @@ export default function ClientsList() {
                         <form onSubmit={handleStatusSubmit} className="p-6">
                             <div className="space-y-4">
                                 <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Fecha y Hora de la Acción <span className="text-red-500">*</span></label>
+                                    <input type="datetime-local" name="custom_date" value={statusFormData.custom_date} onChange={handleStatusFormChange} required className="mt-1 input-field" />
+                                </div>
+
+                                <div>
                                     <label className="block text-sm font-medium leading-6 text-slate-900">Nuevo Estado de Prospecto <span className="text-red-500">*</span></label>
                                     <select name="state" value={statusFormData.state} onChange={handleStatusFormChange} required className="mt-1 input-field bg-white">
                                         <option value="FIRST_MEETING">Primera Cita</option>
@@ -779,6 +808,83 @@ export default function ClientsList() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Historial de Prospecto */}
+            {isHistoryModalOpen && historyClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsHistoryModalOpen(false)}></div>
+
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-y-auto max-h-[90vh] animate-slide-up">
+                        <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-indigo-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-indigo-900">Historial de Estados: {historyClient.name}</h3>
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="text-indigo-400 hover:text-indigo-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            {historyClient.status_history && historyClient.status_history.length > 0 ? (
+                                <div className="space-y-6">
+                                    {historyClient.status_history.map((record, index) => (
+                                        <div key={index} className="relative pl-6 pb-6 border-l-2 border-indigo-200 last:border-0 last:pb-0">
+                                            <div className="absolute w-3 h-3 bg-indigo-500 rounded-full -left-[7px] top-1 ring-4 ring-white"></div>
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                                                        {record.status}
+                                                    </span>
+                                                    <div className="text-right">
+                                                        <div className="text-xs font-semibold text-slate-800" title="Fecha Registrada (Custom)">
+                                                            Ocurrido: {new Date(record.custom_date || record.created_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400 mt-0.5" title="Fecha del Sistema (Creación)">
+                                                            Registrado: {new Date(record.created_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <p className="text-sm text-slate-700 mt-2">{record.reason}</p>
+
+                                                {(record.nrc || record.mrc) && (
+                                                    <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap gap-4">
+                                                        {record.nrc && <span className="text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-1 rounded">NRC: ${record.nrc}</span>}
+                                                        {record.mrc && <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-1 rounded">MRC: ${record.mrc}</span>}
+                                                        {record.mrc && <span className="text-xs font-medium bg-purple-50 text-purple-700 px-2 py-1 rounded">Anual: ${(parseFloat(record.mrc) * 12).toFixed(2)}</span>}
+                                                    </div>
+                                                )}
+
+                                                {record.evidence && (
+                                                    <div className="mt-3">
+                                                        <a href={record.evidence} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                                                            </svg>
+                                                            Ver Evidencia Adjunta
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <p className="text-slate-500">No hay historial de estados registrado para este cliente.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary">
+                                Cerrar Historial
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -25,6 +25,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         evidence = request.FILES.get('evidence')
         nrc = request.data.get('nrc')
         mrc = request.data.get('mrc')
+        custom_date = request.data.get('custom_date')
         
         if not status_val or not reason:
             return Response({'error': 'Status and reason are required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -40,7 +41,8 @@ class ClientViewSet(viewsets.ModelViewSet):
             reason=reason,
             evidence=evidence,
             nrc=nrc if nrc else None,
-            mrc=mrc if mrc else None
+            mrc=mrc if mrc else None,
+            custom_date=custom_date if custom_date else None
         )
         
         serializer = ClientStatusHistorySerializer(history)
