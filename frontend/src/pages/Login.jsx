@@ -98,11 +98,11 @@ export default function Login() {
 
             <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
                 <div className="flex justify-center flex-col items-center">
-                    <div className="w-20 h-20 bg-white rounded-2xl shadow-xl flex items-center justify-center p-3 mb-6 transform rotate-3 hover:rotate-0 transition-transform duration-300">
-                        <img src="/logo.jpg" alt="Datacom Logo" className="w-full h-full object-contain" />
+                    <div className="mb-8 transition-transform duration-300 hover:scale-105">
+                        <img src="/datacom_logo.png" alt="DataCom Logo" className="h-20 w-auto object-contain" />
                     </div>
                     <h2 className="text-center text-3xl font-extrabold text-white">
-                        Datacom CRM
+                        DataCom CRM
                     </h2>
                     <p className="mt-2 text-center text-sm text-slate-300">
                         Inicie sesión para acceder a su panel de control
@@ -197,7 +197,7 @@ export default function Login() {
                                 <ShieldCheck className="w-12 h-12 text-primary-600 mx-auto mb-2" />
                                 <h3 className="text-lg font-bold text-slate-900">Configurar Seguridad (2FA)</h3>
                                 <p className="text-sm text-slate-500 mt-2">
-                                    Por tu seguridad, Datacom CRM requiere Autenticación de Dos Factores.
+                                    Por tu seguridad, DataCom CRM requiere Autenticación de Dos Factores.
                                 </p>
                             </div>
 

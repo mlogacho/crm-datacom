@@ -29,6 +29,51 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    def _transform_profile_data(self, request):
+        data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+        if hasattr(data, 'dict'):
+            data = data.dict()
+            
+        profile_data = {}
+        to_delete = []
+        for key, value in data.items():
+            if key.startswith('profile.'):
+                profile_data[key.replace('profile.', '')] = value
+                to_delete.append(key)
+                
+        for key in to_delete:
+            del data[key]
+            
+        if profile_data:
+            data['profile'] = profile_data
+            
+        return data
+
+    def create(self, request, *args, **kwargs):
+        data = self._transform_profile_data(request)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = True # Always allow partial updates to handle multipart/form-data correctly
+        instance = self.get_object()
+        data = self._transform_profile_data(request)
+        
+        # If user is not superuser, do not allow changing role or username
+        if not request.user.is_superuser:
+            if 'username' in data:
+                del data['username']
+            if 'profile' in data and 'role' in data['profile']:
+                del data['profile']['role']
+                
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_user_permissions(request):
@@ -45,21 +90,30 @@ def get_user_permissions(request):
         "email": user.email,
         "is_superuser": user.is_superuser,
         "role": "Sin Rol",
-        "allowed_views": []
+        "allowed_views": [],
+        "photo": None
     }
 
-    if user.is_superuser:
-        payload["role"] = "Súper Administrador"
-        payload["allowed_views"] = ["dashboard", "clients", "services", "support", "billing", "catalog", "settings"]
-        return Response(payload)
-    
     try:
         profile = user.profile
+        if profile.photo:
+            payload["photo"] = profile.photo.url
+        
+        # Add profile info if needed
+        payload["cedula"] = profile.cedula
+        payload["cargo"] = profile.cargo
+        payload["birthdate"] = profile.birthdate
+        payload["civil_status"] = profile.civil_status
+
         if profile.role:
             payload["role"] = profile.role.name
             payload["allowed_views"] = profile.role.allowed_views
     except UserProfile.DoesNotExist:
         pass
+
+    if user.is_superuser:
+        payload["role"] = "Súper Administrador"
+        payload["allowed_views"] = ["dashboard", "clients", "services", "support", "billing", "catalog", "settings"]
         
     return Response(payload)
 
@@ -153,3 +207,21 @@ def verify_2fa_setup(request):
             
     except User.DoesNotExist:
         return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_account_managers(request):
+    """
+    Returns users with roles: Gerente de Cuenta, Gerente General, Presidente Ejecutivo
+    """
+    roles = ["Gerente de Cuenta", "Gerente General", "Presidente Ejecutivo"]
+    users = User.objects.filter(profile__role__name__in=roles).distinct()
+    
+    data = []
+    for user in users:
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        data.append({
+            "id": user.id,
+            "full_name": full_name or user.username
+        })
+    return Response(data)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, Search, Shield, Users, Pencil, Trash2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const VIEWS_OPTIONS = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -25,8 +26,12 @@ export default function Settings() {
     const [roleForm, setRoleForm] = useState({ id: null, name: '', description: '', allowed_views: [] });
     const [userForm, setUserForm] = useState({
         id: null, username: '', first_name: '', last_name: '', password: '',
-        profile: { cedula: '', cargo: '', role: '' }
+        profile: { cedula: '', cargo: '', role: '', birthdate: '', civil_status: '', photo: null }
     });
+
+    // Auth context to check if current user is superadmin
+    const { userPermissions } = useAuth();
+    const isSuperAdmin = userPermissions?.is_superuser;
 
     useEffect(() => {
         fetchRoles();
@@ -109,7 +114,7 @@ export default function Settings() {
     const openNewUser = () => {
         setUserForm({
             id: null, username: '', first_name: '', last_name: '', password: '',
-            profile: { cedula: '', cargo: '', role: '' }
+            profile: { cedula: '', cargo: '', role: '', birthdate: '', civil_status: '', photo: null }
         });
         setIsUserModalOpen(true);
     };
@@ -124,7 +129,10 @@ export default function Settings() {
             profile: {
                 cedula: user.profile?.cedula || '',
                 cargo: user.profile?.cargo || '',
-                role: user.profile?.role || ''
+                role: user.profile?.role || '',
+                birthdate: user.profile?.birthdate || '',
+                civil_status: user.profile?.civil_status || '',
+                photo: null
             }
         });
         setIsUserModalOpen(true);
@@ -144,11 +152,26 @@ export default function Settings() {
             submitData.profile.role = null;
         }
 
+        const formData = new FormData();
+        formData.append('username', submitData.username);
+        formData.append('first_name', submitData.first_name);
+        formData.append('last_name', submitData.last_name);
+        if (submitData.password) formData.append('password', submitData.password);
+
+        formData.append('profile.cedula', submitData.profile.cedula);
+        formData.append('profile.cargo', submitData.profile.cargo);
+        formData.append('profile.birthdate', submitData.profile.birthdate);
+        formData.append('profile.civil_status', submitData.profile.civil_status);
+        if (submitData.profile.role) formData.append('profile.role', submitData.profile.role);
+        if (submitData.profile.photo instanceof File) {
+            formData.append('profile.photo', submitData.profile.photo);
+        }
+
         try {
             if (submitData.id) {
-                await axios.put(`/api/core/users/${submitData.id}/`, submitData);
+                await axios.put(`/api/core/users/${submitData.id}/`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             } else {
-                await axios.post('/api/core/users/', submitData);
+                await axios.post('/api/core/users/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             }
             setIsUserModalOpen(false);
             fetchUsers();
@@ -182,8 +205,8 @@ export default function Settings() {
                     <button
                         onClick={() => setActiveTab('roles')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${activeTab === 'roles'
-                                ? 'border-primary-500 text-primary-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            ? 'border-primary-500 text-primary-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                             }`}
                     >
                         <Shield className="w-5 h-5" />
@@ -192,8 +215,8 @@ export default function Settings() {
                     <button
                         onClick={() => setActiveTab('users')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${activeTab === 'users'
-                                ? 'border-primary-500 text-primary-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            ? 'border-primary-500 text-primary-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                             }`}
                     >
                         <Users className="w-5 h-5" />
@@ -280,8 +303,19 @@ export default function Settings() {
                                     users.map(user => (
                                         <tr key={user.id}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                                                {user.first_name || user.last_name ? `${user.first_name} ${user.last_name}` : user.username}
-                                                <div className="text-xs text-slate-400 font-normal">@{user.username}</div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold ring-1 ring-slate-200 overflow-hidden shrink-0">
+                                                        {user.profile?.photo ? (
+                                                            <img src={user.profile.photo} alt="" className="h-full w-full object-cover" />
+                                                        ) : (
+                                                            (user.first_name || user.username).substring(0, 1)
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        {user.first_name || user.last_name ? `${user.first_name} ${user.last_name}` : user.username}
+                                                        <div className="text-xs text-slate-400 font-normal">@{user.username}</div>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{user.profile?.cedula || '-'}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{user.profile?.cargo || '-'}</td>
@@ -373,7 +407,7 @@ export default function Settings() {
                                     <h4 className="font-semibold text-sm text-slate-800 border-b pb-1">Credenciales de Acceso</h4>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">Usuario *</label>
-                                        <input type="text" required value={userForm.username} disabled={userForm.username === 'admin'} onChange={e => setUserForm({ ...userForm, username: e.target.value })} className="input-field w-full text-sm" placeholder="Ej. jperez" />
+                                        <input type="text" required value={userForm.username} disabled={!isSuperAdmin || userForm.username === 'admin'} onChange={e => setUserForm({ ...userForm, username: e.target.value })} className="input-field w-full text-sm" placeholder="Ej. jperez" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -388,7 +422,7 @@ export default function Settings() {
                                             value={userForm.profile.role}
                                             onChange={e => setUserForm({ ...userForm, profile: { ...userForm.profile, role: e.target.value } })}
                                             className="input-field w-full text-sm"
-                                            disabled={userForm.username === 'admin'}
+                                            disabled={!isSuperAdmin || userForm.username === 'admin'}
                                         >
                                             <option value="">-- Seleccionar --</option>
                                             {roles.map(r => (
@@ -414,6 +448,25 @@ export default function Settings() {
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">Cargo *</label>
                                         <input type="text" required value={userForm.profile.cargo} onChange={e => setUserForm({ ...userForm, profile: { ...userForm.profile, cargo: e.target.value } })} className="input-field w-full text-sm" placeholder="Ej. Vendedor" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Fecha de Nacimiento</label>
+                                        <input type="date" value={userForm.profile.birthdate} onChange={e => setUserForm({ ...userForm, profile: { ...userForm.profile, birthdate: e.target.value } })} className="input-field w-full text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Estado Civil</label>
+                                        <select value={userForm.profile.civil_status} onChange={e => setUserForm({ ...userForm, profile: { ...userForm.profile, civil_status: e.target.value } })} className="input-field w-full text-sm">
+                                            <option value="">-- Seleccionar --</option>
+                                            <option value="Soltero/a">Soltero/a</option>
+                                            <option value="Casado/a">Casado/a</option>
+                                            <option value="Divorciado/a">Divorciado/a</option>
+                                            <option value="Viudo/a">Viudo/a</option>
+                                            <option value="Unión Libre">Unión Libre</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Fotografía de Perfil</label>
+                                        <input type="file" accept="image/*" onChange={e => setUserForm({ ...userForm, profile: { ...userForm.profile, photo: e.target.files[0] } })} className="input-field w-full text-sm text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
                                     </div>
                                 </div>
                             </div>

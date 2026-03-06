@@ -20,5 +20,9 @@ class UserProfile(models.Model):
     cargo = models.CharField(max_length=100, blank=True, null=True, verbose_name="Cargo")
     totp_secret = models.CharField(max_length=32, blank=True, null=True, verbose_name="Secreto TOTP")
     
+    photo = models.ImageField(upload_to='profiles/', blank=True, null=True, verbose_name="Fotografía")
+    birthdate = models.DateField(blank=True, null=True, verbose_name="Fecha de Nacimiento")
+    civil_status = models.CharField(max_length=50, blank=True, null=True, verbose_name="Estado Civil")
+    
     def __str__(self):
         return f"Perfil de {self.user.username}"

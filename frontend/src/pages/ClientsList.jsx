@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList, Server, FileText } from 'lucide-react';
 import axios from 'axios';
 
 export default function ClientsList() {
+    const location = useLocation();
     const [clients, setClients] = useState([]);
 
     // Filtros combinados
     const [filters, setFilters] = useState({
         search: '',
-        type: '',
+        type: '', // This will now represent service catalog ID
         status: '',
         region: '',
         segment: '',
-        account_manager: ''
+        service_location: '',
+        account_manager: location.state?.filterManager || ''
     });
 
+    const [services, setServices] = useState([]);
+    const [accountManagers, setAccountManagers] = useState([]);
+
+    const [isIdFilterModalOpen, setIsIdFilterModalOpen] = useState(false); // Probablemente no se usa aquí pero mantengo orden
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -28,19 +35,40 @@ export default function ClientsList() {
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [historyClient, setHistoryClient] = useState(null);
 
+    // Active Status Modal State
+    const [isActiveStatusModalOpen, setIsActiveStatusModalOpen] = useState(false);
+    const [activeStatusClient, setActiveStatusClient] = useState(null);
+    const [activeStatusFormData, setActiveStatusFormData] = useState({ state: 'BACKLOG', sub_state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
+    // Services Modal State
+    const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
+    const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+    const [servicesClient, setServicesClient] = useState(null);
+    const [clientServicesList, setClientServicesList] = useState([]);
+    const [newServiceFormData, setNewServiceFormData] = useState({
+        service: '',
+        agreed_price: '',
+        nrc: '',
+        start_date: new Date().toISOString().split('T')[0],
+        status: 'PROSPECTING',
+        bandwidth: '',
+        service_location: '',
+        notes: ''
+    });
+
     // Form state (usado para Nuevo y para Editar)
     const initialFormState = {
         name: '',
         legal_name: '',
         tax_id_type: 'RUC',
         tax_id: '',
-        type: 'HOUSING',
+        client_type_new: '', // Changed from type
         email: '',
         phone: '',
         address: '',
         region: '',
         city: '',
         segment: '',
+        service_location: '',
         account_manager: '',
         is_active: true,
         classification: 'PROSPECT'
@@ -49,7 +77,35 @@ export default function ClientsList() {
 
     useEffect(() => {
         fetchClients();
+        fetchServices();
+        fetchAccountManagers();
     }, []);
+
+    useEffect(() => {
+        if (location.state?.globalSearch !== undefined) {
+            setFilters(prev => ({ ...prev, search: location.state.globalSearch }));
+        }
+    }, [location.state?.globalSearch]);
+
+    const fetchAccountManagers = async () => {
+        try {
+            const response = await axios.get('/api/core/account-managers/');
+            setAccountManagers(response.data);
+        } catch (error) {
+            console.error('Error fetching account managers:', error);
+        }
+    };
+
+    const fetchServices = async () => {
+        try {
+            const response = await axios.get('/api/services/catalog/');
+            const data = response.data.results || response.data;
+            const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            setServices(sorted);
+        } catch (error) {
+            console.error('Error fetching services:', error);
+        }
+    };
 
     const fetchClients = async () => {
         try {
@@ -60,9 +116,11 @@ export default function ClientsList() {
                 name: client.name,
                 legal_name: client.legal_name,
                 tax_id: client.tax_id,
-                type: client.client_type,
+                client_type_new: client.client_type_new,
                 classification: client.classification,
                 prospect_status: client.prospect_status,
+                active_status: client.active_status,
+                status_history: client.status_history,
                 status: client.is_active ? 'Activo' : 'Inactivo',
                 is_active: client.is_active,
                 email: client.email,
@@ -71,6 +129,7 @@ export default function ClientsList() {
                 region: client.region || '',
                 city: client.city || '',
                 segment: client.segment || '',
+                service_location: client.service_location || '',
                 account_manager: client.account_manager || ''
             }));
             setClients(mappedClients);
@@ -92,6 +151,41 @@ export default function ClientsList() {
         }));
     };
 
+    const translateStatus = (status) => {
+        if (!status) return status;
+        const statusTranslations = {
+            'FIRST_MEETING': 'Primera Cita',
+            'CONTACTED': 'Contactado',
+            'OFFERED': 'Ofertado',
+            'FOLLOW_UP': 'Seguimiento',
+            'CLOSING_MEETING': 'Cita Cierre',
+            'ADJUDICATED': 'Adjudicado',
+            'TDR_ELABORATION': 'Elaboración de TDR',
+            'LOST_DEAL': 'Negocio Perdido',
+            'BACKLOG': 'Backlog',
+            'BILLED': 'Facturado',
+            'NEW_SERVICE': 'Servicio Nuevo',
+            'DOWN_GRADE': 'Down Grade',
+            'UP_GRADE': 'Up Grade',
+            'DEMO': 'Demo'
+        };
+
+        if (status.includes(' - ')) {
+            const parts = status.split(' - ');
+            const main = statusTranslations[parts[0]] || parts[0];
+            const sub = statusTranslations[parts[1]] || parts[1];
+            return `${main} - ${sub}`;
+        }
+        return statusTranslations[status] || status;
+    };
+
+    const formatManagerName = (name) => {
+        if (!name) return 'N/A';
+        return name.split(' ').map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -104,10 +198,8 @@ export default function ClientsList() {
         try {
             const payload = {
                 ...formData,
-                client_type: formData.type,
                 name: formData.name.trim() === '' ? formData.legal_name : formData.name
             };
-            delete payload.type;
             delete payload.tax_id_type;
 
             await axios.post('/api/clients/clients/', payload);
@@ -130,13 +222,14 @@ export default function ClientsList() {
             legal_name: client.legal_name || '',
             tax_id_type: 'RUC', // fallback genérico
             tax_id: client.tax_id,
-            type: client.type,
+            client_type_new: client.client_type_new || '',
             email: client.email,
             phone: client.phone || '',
             address: client.address || '',
             region: client.region || '',
             city: client.city || '',
             segment: client.segment || '',
+            service_location: client.service_location || '',
             account_manager: client.account_manager || '',
             is_active: client.is_active,
             classification: client.classification || 'PROSPECT'
@@ -149,10 +242,8 @@ export default function ClientsList() {
         try {
             const payload = {
                 ...formData,
-                client_type: formData.type,
                 name: formData.name.trim() === '' ? formData.legal_name : formData.name
             };
-            delete payload.type;
             delete payload.tax_id_type;
 
             await axios.patch(`/api/clients/clients/${editingClient.id}/`, payload);
@@ -226,6 +317,112 @@ export default function ClientsList() {
         }
     };
 
+    const handleActiveStatusFormChange = (e) => {
+        const { name, value, files } = e.target;
+        setActiveStatusFormData(prev => ({
+            ...prev,
+            [name]: files ? files[0] : value
+        }));
+    };
+
+    // --- Service Management Functions ---
+    const fetchClientServices = async (clientId) => {
+        try {
+            const res = await axios.get(`/api/services/client-services/?client=${clientId}`);
+            setClientServicesList(res.data.results || res.data);
+        } catch (error) {
+            console.error("Error fetching client services:", error);
+        }
+    };
+
+    const handleServiceSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                client: servicesClient.id,
+                service: newServiceFormData.service,
+                agreed_price: newServiceFormData.agreed_price,
+                nrc: newServiceFormData.nrc || 0,
+                start_date: newServiceFormData.start_date,
+                status: newServiceFormData.status,
+                bandwidth: newServiceFormData.bandwidth,
+                service_location: newServiceFormData.service_location,
+                notes: newServiceFormData.notes
+            };
+            await axios.post('/api/services/client-services/', payload);
+            setNewServiceFormData({
+                service: '',
+                agreed_price: '',
+                nrc: '',
+                start_date: new Date().toISOString().split('T')[0],
+                status: 'PROSPECTING',
+                bandwidth: '',
+                service_location: '',
+                notes: ''
+            });
+            fetchClientServices(servicesClient.id);
+            alert("Servicio asociado correctamente.");
+        } catch (error) {
+            console.error("Error adding service:", error);
+            alert("Error al asociar el servicio.");
+        }
+    };
+
+    const deleteClientService = async (serviceId) => {
+        if (window.confirm("¿Seguro que deseas desvincular este servicio del cliente?")) {
+            try {
+                await axios.delete(`/api/services/client-services/${serviceId}/`);
+                fetchClientServices(servicesClient.id);
+            } catch (error) {
+                console.error("Error deleting client service:", error);
+                alert("Error al eliminar la vinculación.");
+            }
+        }
+    };
+
+
+    const handleActiveStatusSubmit = async (e) => {
+        e.preventDefault();
+
+        if (activeStatusFormData.state === 'NEW_SERVICE' && activeStatusFormData.sub_state === 'OFFERED') {
+            if (!activeStatusFormData.nrc && !activeStatusFormData.mrc) {
+                alert('Al seleccionar el estado "OFERTADO", debes ingresar obligatoriamente al menos el valor de NRC o MRC.');
+                return;
+            }
+        }
+
+        const data = new FormData();
+        data.append('status', activeStatusFormData.state);
+        if (activeStatusFormData.state === 'NEW_SERVICE') {
+            data.append('sub_status', activeStatusFormData.sub_state);
+        }
+        data.append('reason', activeStatusFormData.reason);
+        if (activeStatusFormData.evidence) {
+            data.append('evidence', activeStatusFormData.evidence);
+        }
+        if (activeStatusFormData.custom_date) {
+            data.append('custom_date', activeStatusFormData.custom_date);
+        }
+        if (activeStatusFormData.state === 'NEW_SERVICE' && activeStatusFormData.sub_state === 'OFFERED') {
+            if (activeStatusFormData.nrc) data.append('nrc', activeStatusFormData.nrc);
+            if (activeStatusFormData.mrc) data.append('mrc', activeStatusFormData.mrc);
+        }
+
+        try {
+            await axios.post(`/api/clients/clients/${activeStatusClient.id}/update_active_status/`, data, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            fetchClients();
+            setIsActiveStatusModalOpen(false);
+            setActiveStatusClient(null);
+            setActiveStatusFormData({ state: 'BACKLOG', sub_state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
+            alert('¡Estado de cliente activo actualizado!');
+        } catch (error) {
+            console.error('Error updating active status:', error);
+            alert('Error al actualizar el estado activo.');
+        }
+    };
+
     const handleImportSubmit = async (e) => {
         e.preventDefault();
         if (!importFile) {
@@ -274,6 +471,7 @@ export default function ClientsList() {
     // Extraer valores únicos para los dropdowns de filtros
     const uniqueRegions = [...new Set(clients.map(c => c.region).filter(Boolean))];
     const uniqueSegments = [...new Set(clients.map(c => c.segment).filter(Boolean))];
+    const uniqueServiceLocations = [...new Set(clients.map(c => c.service_location).filter(Boolean))];
     const uniqueManagers = [...new Set(clients.map(c => c.account_manager).filter(Boolean))];
 
     const filteredClients = clients.filter(client => {
@@ -286,9 +484,10 @@ export default function ClientsList() {
         const matchStatus = filters.status === '' || client.status === filters.status;
         const matchRegion = filters.region === '' || client.region === filters.region;
         const matchSegment = filters.segment === '' || client.segment === filters.segment;
+        const matchServiceLocation = filters.service_location === '' || client.service_location === filters.service_location;
         const matchManager = filters.account_manager === '' || client.account_manager === filters.account_manager;
 
-        return matchSearch && matchType && matchStatus && matchRegion && matchSegment && matchManager;
+        return matchSearch && matchType && matchStatus && matchRegion && matchSegment && matchServiceLocation && matchManager;
     });
 
     const FormFields = () => (
@@ -324,13 +523,15 @@ export default function ClientsList() {
             </div>
 
             <div>
-                <label className="block text-sm font-medium leading-6 text-slate-900">Tipo de Cliente <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Servicio <span className="text-red-500">*</span></label>
                 <div className="mt-1">
-                    <select name="type" value={formData.type} onChange={handleInputChange} className="input-field bg-white">
-                        <option value="HOUSING">Housing / Colocation</option>
-                        <option value="TELECOM">Telecomunicaciones</option>
-                        <option value="APP_DEV">Desarrollo de Apps</option>
-                        <option value="OTHER">Otro</option>
+                    <select name="client_type_new" value={formData.client_type_new} onChange={handleInputChange} className="input-field bg-white">
+                        <option value="">Seleccione un Servicio...</option>
+                        {services.map(s => (
+                            <option key={s.id} value={s.id}>
+                                {s.internal_code ? `[${s.internal_code}] ` : ''}{s.name}
+                            </option>
+                        ))}
                     </select>
                 </div>
             </div>
@@ -346,27 +547,69 @@ export default function ClientsList() {
             </div>
 
             <div className="space-y-4 md:col-span-2 mt-2">
-                <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Datos Operativos (Migración)</h4>
+                <h4 className="text-sm font-semibold text-slate-900 border-b border-slate-200 pb-2">Datos del Servicio</h4>
             </div>
 
             <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Región</label>
-                <input type="text" name="region" value={formData.region} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. R1, R2, Costa, Sierra" />
+                <select name="region" value={formData.region} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="R1">R1</option>
+                    <option value="R2">R2</option>
+                </select>
             </div>
 
             <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Ciudad</label>
-                <input type="text" name="city" value={formData.city} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. Quito, Guayaquil" />
+                <select name="city" value={formData.city} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="QUITO">QUITO</option>
+                    <option value="CUENCA">CUENCA</option>
+                    <option value="MANTA">MANTA</option>
+                    <option value="AMBATO">AMBATO</option>
+                    <option value="MACHALA">MACHALA</option>
+                    <option value="SANTO DOMINGO">SANTO DOMINGO</option>
+                    <option value="ESMERALDAS">ESMERALDAS</option>
+                    <option value="TULCAN">TULCAN</option>
+                </select>
             </div>
 
             <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Segmento</label>
-                <input type="text" name="segment" value={formData.segment} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. BANCA, PETRÓLEO, GOBIERNO" />
+                <select name="segment" value={formData.segment} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="GOBIERNO">GOBIERNO</option>
+                    <option value="COMERCIO">COMERCIO</option>
+                    <option value="AGRICULTURA">AGRICULTURA</option>
+                    <option value="GANADERÍA Y PESCA">GANADERÍA Y PESCA</option>
+                    <option value="CONSTRUCCIÓN">CONSTRUCCIÓN</option>
+                    <option value="INDUSTRIA">INDUSTRIA</option>
+                    <option value="PETRÓLEO Y MINERÍA">PETRÓLEO Y MINERÍA</option>
+                    <option value="SEGURIDAD">SEGURIDAD</option>
+                    <option value="SECTOR FINANCIERO">SECTOR FINANCIERO</option>
+                    <option value="SERVICIOS">SERVICIOS</option>
+                    <option value="TRANSPORTE Y LOGÍSTICA">TRANSPORTE Y LOGÍSTICA</option>
+                    <option value="TURISMO Y ALIMENTACIÓN">TURISMO Y ALIMENTACIÓN</option>
+                    <option value="EDUCACIÓN">EDUCACIÓN</option>
+                </select>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium leading-6 text-slate-900">Ubicación del Servicio</label>
+                <input type="text" name="service_location" value={formData.service_location} onChange={handleInputChange} className="mt-1 input-field" placeholder="Ej. Planta Sur, Oficina Central" />
             </div>
 
             <div>
                 <label className="block text-sm font-medium leading-6 text-slate-900">Gerente de Cuenta</label>
-                <input type="text" name="account_manager" value={formData.account_manager} onChange={handleInputChange} className="mt-1 input-field" placeholder="Nombre del Asignado" />
+                <select name="account_manager" value={formData.account_manager} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                    <option value="">Seleccione un Gerente...</option>
+                    {accountManagers.map(mgr => (
+                        <option key={mgr.id} value={mgr.full_name}>{mgr.full_name}</option>
+                    ))}
+                    {!accountManagers.find(m => m.full_name === formData.account_manager) && formData.account_manager && (
+                        <option value={formData.account_manager}>{formData.account_manager}</option>
+                    )}
+                </select>
             </div>
 
             <div className="col-span-1 md:col-span-2 flex items-center gap-2 mt-2">
@@ -436,22 +679,29 @@ export default function ClientsList() {
                                 <input
                                     type="text"
                                     name="search"
+                                    list="client-suggestions"
                                     className="input-field pl-9 text-sm py-2"
                                     placeholder="Buscar clientes..."
                                     value={filters.search}
                                     onChange={handleFilterChange}
                                 />
+                                <datalist id="client-suggestions">
+                                    {[...new Set(clients.map(c => c.name).filter(Boolean))].sort().map((name, idx) => (
+                                        <option key={idx} value={name} />
+                                    ))}
+                                </datalist>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Servicio</label>
                             <select name="type" value={filters.type} onChange={handleFilterChange} className="input-field bg-white text-sm py-2 px-3">
                                 <option value="">Todos</option>
-                                <option value="HOUSING">Housing</option>
-                                <option value="TELECOM">Telecom</option>
-                                <option value="APP_DEV">App Dev</option>
-                                <option value="OTHER">Otro</option>
+                                {services.map(s => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.internal_code ? `[${s.internal_code}] ` : ''}{s.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -486,11 +736,11 @@ export default function ClientsList() {
                     <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Cliente</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipo & Estado</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Detalles Operativos</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Contacto Principal</th>
-                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CLIENTE</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SERVICIO & ESTADO</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">DETALLES OPERATIVOS</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CONTACTO PRINCIPAL</th>
+                                <th scope="col" className="relative px-6 py-3 tracking-wider"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
@@ -499,7 +749,8 @@ export default function ClientsList() {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-slate-100 border border-slate-200">
-                                                {getClientIcon(client.type)}
+                                                {/* Use a generic icon for now or map based on some property */}
+                                                <Building2 className="w-5 h-5 text-blue-500" />
                                             </div>
                                             <div className="ml-4">
                                                 <div className="text-sm font-bold text-slate-900">{client.name}</div>
@@ -508,24 +759,43 @@ export default function ClientsList() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-slate-900 mb-1">{client.type}</div>
-                                        <div className="flex flex-col gap-1 items-start">
-                                            {getStatusBadge(client.status)}
-                                            {client.classification === 'PROSPECT' ? (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                                                    Prospecto: <span className="ml-1 font-bold">{client.prospect_status || 'NUEVO'}</span>
-                                                </span>
+                                        <div className="space-y-3">
+                                            {client.assigned_services && client.assigned_services.length > 0 ? (
+                                                client.assigned_services.map((as, idx) => (
+                                                    <div key={idx} className={idx > 0 ? "pt-2 border-t border-slate-50" : ""}>
+                                                        <div className="text-sm font-bold text-slate-900 mb-1">{as.service_name}</div>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                                {translateStatus(as.status)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))
                                             ) : (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                                    Cliente Activo
-                                                </span>
+                                                <div className="text-sm font-bold text-slate-900 mb-1">
+                                                    {services.find(s => s.id === client.client_type_new)?.name || 'S/N'}
+                                                </div>
                                             )}
+                                            <div className="flex flex-col gap-1 items-start mt-1">
+                                                <div className="flex gap-1">
+                                                    {getStatusBadge(client.status)}
+                                                    {client.classification === 'PROSPECT' ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase">
+                                                            {translateStatus(client.prospect_status) || 'PROSPECTO'}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
+                                                            {translateStatus(client.active_status) || 'ACTIVO'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {client.account_manager || 'N/A'}</div>
+                                        <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {formatManagerName(client.account_manager)}</div>
                                         <div className="text-xs text-slate-500 mt-1">{client.region} {client.region && client.city ? '-' : ''} {client.city}</div>
-                                        <div className="text-xs text-slate-500">{client.segment}</div>
+                                        <div className="text-xs text-slate-500">{client.segment}{client.service_location && ` | ${client.service_location}`}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-slate-900">{client.email}</div>
@@ -562,6 +832,57 @@ export default function ClientsList() {
                                                     </button>
                                                 </>
                                             )}
+                                            {client.classification === 'ACTIVE' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => {
+                                                            const now = new Date();
+                                                            const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                                                            setActiveStatusClient(client);
+                                                            setActiveStatusFormData(prev => ({ ...prev, custom_date: localDateTime }));
+                                                            setIsActiveStatusModalOpen(true);
+                                                        }}
+                                                        className="text-blue-500 hover:text-blue-600 transition-colors"
+                                                        title="Gestionar Estado de Activo"
+                                                    >
+                                                        <ClipboardList className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setHistoryClient(client);
+                                                            setIsHistoryModalOpen(true);
+                                                        }}
+                                                        className="text-indigo-500 hover:text-indigo-600 transition-colors"
+                                                        title="Ver Historial del Cliente"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                        </svg>
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button
+                                                onClick={() => {
+                                                    setServicesClient(client);
+                                                    fetchClientServices(client.id);
+                                                    setIsServicesModalOpen(true);
+                                                }}
+                                                className="text-indigo-600 hover:text-indigo-700 transition-colors"
+                                                title="Gestionar Servicios"
+                                            >
+                                                <Server className="w-5 h-5" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setServicesClient(client);
+                                                    fetchClientServices(client.id);
+                                                    setIsSummaryModalOpen(true);
+                                                }}
+                                                className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                                                title="Ver Resumen de Servicios"
+                                            >
+                                                <FileText className="w-5 h-5" />
+                                            </button>
                                             <button
                                                 onClick={() => openEditModal(client)}
                                                 className="text-slate-400 hover:text-blue-500 transition-colors"
@@ -607,7 +928,7 @@ export default function ClientsList() {
             {/* Modal de Nuevo Cliente */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-y-auto max-h-[90vh] animate-slide-up">
                         <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
@@ -621,7 +942,7 @@ export default function ClientsList() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6">
-                            <FormFields />
+                            {FormFields()}
 
                             <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
                                 <button type="button" onClick={() => setIsModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
@@ -640,7 +961,7 @@ export default function ClientsList() {
             {/* Modal de Editar Cliente */}
             {isEditModalOpen && editingClient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-y-auto max-h-[90vh] animate-slide-up">
                         <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
@@ -654,7 +975,7 @@ export default function ClientsList() {
                         </div>
 
                         <form onSubmit={handleEditSubmit} className="p-6">
-                            <FormFields />
+                            {FormFields()}
 
                             <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
                                 <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
@@ -675,7 +996,7 @@ export default function ClientsList() {
             {/* Modal de Importación CSV */}
             {isImportModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsImportModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -692,7 +1013,7 @@ export default function ClientsList() {
                             <div className="mb-6">
                                 <p className="text-sm text-slate-600 mb-4">
                                     Asegúrese de exportar su archivo de Excel (`.xlsx`) a formato <strong>Valores separados por comas (.csv)</strong>.
-                                    El archivo debe contener las cabeceras exactas (REGION, CIUDAD, CLIENTE, SEGMENTO, ESTADO...).
+                                    El archivo debe contener las cabeceras exactas (REGION, CIUDAD, CLIENTE, SEGMENTO, CLASIFICACION DEL CLIENTE, UBICACION DEL SERVICIO, ESTADO...).
                                 </p>
                                 <label className="block text-sm font-medium leading-6 text-slate-900">Seleccionar Archivo .CSV</label>
                                 <div className="mt-2 flex justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 hover:border-primary-500 transition-colors bg-slate-50">
@@ -728,7 +1049,7 @@ export default function ClientsList() {
             {/* Modal de Estado de Prospecto */}
             {isStatusModalOpen && statusClient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsStatusModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
                         <div className="px-6 py-4 border-b border-slate-200 bg-amber-50 flex justify-between items-center">
@@ -815,7 +1136,7 @@ export default function ClientsList() {
             {/* Modal de Historial de Prospecto */}
             {isHistoryModalOpen && historyClient && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsHistoryModalOpen(false)}></div>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
 
                     <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-y-auto max-h-[90vh] animate-slide-up">
                         <div className="sticky top-0 z-10 px-6 py-4 border-b border-slate-200 bg-indigo-50 flex justify-between items-center">
@@ -837,7 +1158,7 @@ export default function ClientsList() {
                                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 shadow-sm">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
-                                                        {record.status}
+                                                        {translateStatus(record.status)}
                                                     </span>
                                                     <div className="text-right">
                                                         <div className="text-xs font-semibold text-slate-800" title="Fecha Registrada (Custom)">
@@ -888,6 +1209,364 @@ export default function ClientsList() {
                     </div>
                 </div>
             )}
+
+            {/* Modal de Estado de Cliente Activo */}
+            {isActiveStatusModalOpen && activeStatusClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-blue-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-blue-900">Actualizar Estado: {activeStatusClient.name}</h3>
+                            <button onClick={() => setIsActiveStatusModalOpen(false)} className="text-blue-400 hover:text-blue-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleActiveStatusSubmit} className="p-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Fecha y Hora de la Acción <span className="text-red-500">*</span></label>
+                                    <input type="datetime-local" name="custom_date" value={activeStatusFormData.custom_date} onChange={handleActiveStatusFormChange} required className="mt-1 input-field" />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Estado de Cliente Activo <span className="text-red-500">*</span></label>
+                                    <select name="state" value={activeStatusFormData.state} onChange={handleActiveStatusFormChange} required className="mt-1 input-field bg-white">
+                                        <option value="BACKLOG">Backlog</option>
+                                        <option value="BILLED">Facturado</option>
+                                        <option value="NEW_SERVICE">Servicio Nuevo</option>
+                                        <option value="DOWN_GRADE">Down Grade</option>
+                                        <option value="UP_GRADE">Up Grade</option>
+                                        <option value="DEMO">Demo</option>
+                                    </select>
+                                </div>
+
+                                {activeStatusFormData.state === 'NEW_SERVICE' && (
+                                    <div className="p-4 bg-orange-50 border border-orange-100 rounded-lg space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">Sub-Estado del Servicio Nuevo <span className="text-red-500">*</span></label>
+                                            <select name="sub_state" value={activeStatusFormData.sub_state} onChange={handleActiveStatusFormChange} required className="mt-1 input-field bg-white border-orange-200 focus:ring-orange-500 focus:border-orange-500">
+                                                <option value="FIRST_MEETING">Primera Cita</option>
+                                                <option value="CONTACTED">Contactado</option>
+                                                <option value="OFFERED">Ofertado</option>
+                                                <option value="FOLLOW_UP">Seguimiento</option>
+                                                <option value="CLOSING_MEETING">Cita Cierre</option>
+                                                <option value="ADJUDICATED">Adjudicado</option>
+                                                <option value="TDR_ELABORATION">Elaboración de TDR</option>
+                                                <option value="LOST_DEAL">Negocio Perdido</option>
+                                            </select>
+                                        </div>
+
+                                        {activeStatusFormData.sub_state === 'OFFERED' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="md:col-span-2">
+                                                    <p className="text-xs font-semibold text-orange-800 mb-1">Ingresa al menos uno de los valores financieros para la oferta:</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium leading-6 text-slate-900">NRC ($)</label>
+                                                    <input type="number" step="0.01" min="0" name="nrc" value={activeStatusFormData.nrc || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-orange-200" placeholder="0.00" />
+                                                    <p className="text-[10px] text-slate-500 mt-1">Non Recurring Charge</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium leading-6 text-slate-900">MRC ($)</label>
+                                                    <input type="number" step="0.01" min="0" name="mrc" value={activeStatusFormData.mrc || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-orange-200" placeholder="0.00" />
+                                                    <p className="text-[10px] text-slate-500 mt-1">Monthly Recurring Charge</p>
+                                                </div>
+                                                {activeStatusFormData.mrc && (
+                                                    <div className="md:col-span-2 mt-2 p-3 bg-white border border-orange-200 rounded text-center">
+                                                        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Valor Anual Proyectado (MRC x 12):</span>
+                                                        <div className="text-lg font-bold text-emerald-600 mt-1">
+                                                            ${(parseFloat(activeStatusFormData.mrc) * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Razón / Comentarios <span className="text-red-500">*</span></label>
+                                    <textarea name="reason" value={activeStatusFormData.reason} onChange={handleActiveStatusFormChange} required rows="3" className="mt-1 input-field" placeholder="Describe la razón de este cambio de estado..."></textarea>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Evidencia (Opcional)</label>
+                                    <input type="file" name="evidence" onChange={handleActiveStatusFormChange} className="mt-1 block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
+                                </div>
+                            </div>
+
+                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
+                                <button type="button" onClick={() => setIsActiveStatusModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="btn-primary bg-blue-600 hover:bg-blue-700 text-white">
+                                    Guardar Estado
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Gestión de Servicios */}
+            {isServicesModalOpen && servicesClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-hidden animate-slide-up flex flex-col max-h-[90vh]">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-900">Servicios Contratados: {servicesClient.name}</h3>
+                                <p className="text-sm text-slate-500">Gestiona los múltiples servicios asociados a este cliente.</p>
+                            </div>
+                            <button onClick={() => setIsServicesModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-1 border-r border-slate-100 pr-0 lg:pr-6">
+                                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Plus className="w-5 h-5 text-primary-600" /> Vincular Nuevo Servicio
+                                </h4>
+                                <form onSubmit={handleServiceSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Servicio *</label>
+                                        <select
+                                            required
+                                            value={newServiceFormData.service}
+                                            onChange={e => setNewServiceFormData({ ...newServiceFormData, service: e.target.value })}
+                                            className="mt-1 input-field w-full bg-white"
+                                        >
+                                            <option value="">-- Seleccionar --</option>
+                                            {services.map(s => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.internal_code ? `[${s.internal_code}] ` : ''}{s.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">MRC ($) *</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                required
+                                                value={newServiceFormData.agreed_price}
+                                                onChange={e => setNewServiceFormData({ ...newServiceFormData, agreed_price: e.target.value })}
+                                                className="input-field w-full"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">NRC ($)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={newServiceFormData.nrc}
+                                                onChange={e => setNewServiceFormData({ ...newServiceFormData, nrc: e.target.value })}
+                                                className="input-field w-full"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Estado Inicial *</label>
+                                        <select
+                                            required
+                                            value={newServiceFormData.status}
+                                            onChange={e => setNewServiceFormData({ ...newServiceFormData, status: e.target.value })}
+                                            className="input-field w-full bg-white"
+                                        >
+                                            <option value="PROSPECTING">Prospección</option>
+                                            <option value="INSTALLED">Instalado / Activo</option>
+                                            <option value="BACKLOG">Backlog</option>
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Velocidad (Mbps)</label>
+                                            <input
+                                                type="text"
+                                                value={newServiceFormData.bandwidth}
+                                                onChange={e => setNewServiceFormData({ ...newServiceFormData, bandwidth: e.target.value })}
+                                                className="input-field w-full"
+                                                placeholder="e.g. 50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Ubicación del Servicio</label>
+                                            <input
+                                                type="text"
+                                                value={newServiceFormData.service_location}
+                                                onChange={e => setNewServiceFormData({ ...newServiceFormData, service_location: e.target.value })}
+                                                className="input-field w-full"
+                                                placeholder="Dirección..."
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones</label>
+                                        <textarea
+                                            value={newServiceFormData.notes}
+                                            onChange={e => setNewServiceFormData({ ...newServiceFormData, notes: e.target.value })}
+                                            className="input-field w-full"
+                                            rows={2}
+                                            placeholder="Notas adicionales..."
+                                        />
+                                    </div>
+                                    <button type="submit" className="btn-primary w-full py-2.5">
+                                        Vincular Servicio
+                                    </button>
+                                </form>
+                            </div>
+
+                            <div className="lg:col-span-2">
+                                <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Server className="w-5 h-5 text-indigo-600" /> Servicios Actuales
+                                </h4>
+                                {clientServicesList.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {clientServicesList.map(item => {
+                                            const serviceName = services.find(s => s.id === item.service)?.name || 'Servicio Desconocido';
+                                            return (
+                                                <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-bold text-slate-900">{serviceName}</div>
+                                                        <div className="flex flex-wrap gap-4 mt-1">
+                                                            <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">MRC:</span> ${item.agreed_price}</div>
+                                                            <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">Estado:</span> {translateStatus(item.status)}</div>
+                                                            {item.bandwidth && <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">Vel:</span> {item.bandwidth} Mbps</div>}
+                                                            {item.service_location && <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">Loc:</span> {item.service_location}</div>}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => deleteClientService(item.id)}
+                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    >
+                                                        <Trash2 className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                        <Server className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                        <p className="text-slate-500">Este cliente aún no tiene servicios específicos vinculados.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                            <button onClick={() => setIsServicesModalOpen(false)} className="btn-secondary">
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isSummaryModalOpen && servicesClient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsSummaryModalOpen(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 bg-emerald-600 text-white flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-bold">Resumen de Servicios</h3>
+                                <p className="text-emerald-100 text-sm tracking-wide uppercase font-semibold">{servicesClient.name}</p>
+                            </div>
+                            <button onClick={() => setIsSummaryModalOpen(false)} className="hover:bg-emerald-700 p-2 rounded-full transition-colors">
+                                <Plus className="w-6 h-6 rotate-45" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 max-h-[70vh] overflow-y-auto">
+                            <div className="space-y-4">
+                                {clientServicesList.length > 0 ? (
+                                    <>
+                                        <table className="min-w-full divide-y divide-slate-200 border border-slate-100 rounded-lg overflow-hidden">
+                                            <thead className="bg-slate-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Servicio</th>
+                                                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase">Ubicación del Servicio</th>
+                                                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                                                    <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">MRC</th>
+                                                    <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase">NRC</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 bg-white">
+                                                {clientServicesList.map(item => {
+                                                    const sName = services.find(s => s.id === item.service)?.name || 'N/A';
+                                                    return (
+                                                        <tr key={item.id} className="hover:bg-slate-50/50">
+                                                            <td className="px-4 py-3 text-sm font-medium text-slate-800">{sName}</td>
+                                                            <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[150px]" title={item.service_location}>{item.service_location || 'S/N'}</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${item.status === 'INSTALLED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                                                                    {translateStatus(item.status)}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">${Number(item.agreed_price || 0).toFixed(2)}</td>
+                                                            <td className="px-4 py-3 text-right text-sm font-medium text-slate-500">${Number(item.nrc || 0).toFixed(2)}</td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+
+                                        <div className="mt-6 p-4 bg-slate-900 rounded-xl text-white shadow-lg flex justify-between items-center">
+                                            <div className="flex flex-wrap gap-8">
+                                                <div>
+                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Servicios Totales</p>
+                                                    <p className="text-2xl font-black text-white">
+                                                        {clientServicesList.length}
+                                                    </p>
+                                                </div>
+                                                <div className="border-l border-slate-700 pl-8">
+                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Total Mensual (MRC)</p>
+                                                    <p className="text-2xl font-black text-emerald-400">
+                                                        ${clientServicesList.reduce((acc, curr) => acc + Number(curr.agreed_price || 0), 0).toFixed(2)}
+                                                    </p>
+                                                </div>
+                                                <div className="border-l border-slate-700 pl-8">
+                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Total Único (NRC)</p>
+                                                    <p className="text-2xl font-black text-blue-400">
+                                                        ${clientServicesList.reduce((acc, curr) => acc + Number(curr.nrc || 0), 0).toFixed(2)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className={`px-3 py-1 rounded-full text-[10px] font-bold inline-block uppercase ${servicesClient.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
+                                                    {servicesClient.is_active ? 'Cliente Activo' : 'Cliente Inactivo'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                        <p className="text-slate-500">No hay servicios asociados a este cliente.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+                            <button onClick={() => setIsSummaryModalOpen(false)} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900 transition-colors">
+                                Cerrar Resumen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+

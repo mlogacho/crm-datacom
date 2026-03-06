@@ -12,9 +12,10 @@ export default function ServiceCatalogList() {
 
     // Form State
     const [formData, setFormData] = useState({
+        internal_code: '',
         name: '',
         description: '',
-        service_type: 'OTHER',
+        client_taxes: '',
         base_cost: '',
         base_price: ''
     });
@@ -52,9 +53,10 @@ export default function ServiceCatalogList() {
         setModalMode('add');
         setEditingId(null);
         setFormData({
+            internal_code: '',
             name: '',
             description: '',
-            service_type: 'OTHER',
+            client_taxes: '',
             base_cost: '',
             base_price: ''
         });
@@ -65,9 +67,10 @@ export default function ServiceCatalogList() {
         setModalMode('edit');
         setEditingId(service.id);
         setFormData({
+            internal_code: service.internal_code || '',
             name: service.name,
             description: service.description || '',
-            service_type: service.service_type,
+            client_taxes: service.client_taxes || '',
             base_cost: service.base_cost,
             base_price: service.base_price
         });
@@ -148,10 +151,16 @@ export default function ServiceCatalogList() {
                         <thead className="bg-slate-50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                                    Cód. Referencia
+                                </th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                                     Servicio
                                 </th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">
                                     Descripción
+                                </th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">
+                                    Impuestos
                                 </th>
                                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
                                     Costo
@@ -181,6 +190,9 @@ export default function ServiceCatalogList() {
                             ) : (
                                 filteredServices.map((service) => (
                                     <tr key={service.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                            {service.internal_code || '-'}
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div className="flex-shrink-0 h-10 w-10 bg-primary-50 rounded-lg flex items-center justify-center text-primary-600">
@@ -188,12 +200,14 @@ export default function ServiceCatalogList() {
                                                 </div>
                                                 <div className="ml-4">
                                                     <div className="text-sm font-medium text-slate-900">{service.name}</div>
-                                                    <div className="text-xs text-slate-500">{SERVICE_TYPES[service.service_type] || service.service_type}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 hidden md:table-cell max-w-xs truncate text-sm text-slate-500">
                                             {service.description || <span className="text-slate-400 italic">Sin descripción</span>}
+                                        </td>
+                                        <td className="px-6 py-4 hidden md:table-cell max-w-xs truncate text-sm text-slate-500">
+                                            {service.client_taxes || '-'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-500">
                                             ${parseFloat(service.base_cost).toFixed(2)}
@@ -249,7 +263,19 @@ export default function ServiceCatalogList() {
                         <form onSubmit={handleAddSubmit} className="p-6">
                             <div className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Servicio *</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Código Referencia Interna</label>
+                                    <input
+                                        type="text"
+                                        name="internal_code"
+                                        value={formData.internal_code}
+                                        onChange={handleInputChange}
+                                        className="input-field w-full"
+                                        placeholder="Ej. REF-001"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Servicio *</label>
                                     <input
                                         type="text"
                                         name="name"
@@ -262,22 +288,6 @@ export default function ServiceCatalogList() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Servicio *</label>
-                                    <select
-                                        name="service_type"
-                                        required
-                                        value={formData.service_type}
-                                        onChange={handleInputChange}
-                                        className="input-field w-full"
-                                    >
-                                        <option value="HOUSING">Housing/Colocation</option>
-                                        <option value="TELECOM">Telecom / Internet</option>
-                                        <option value="APP_DEV">Desarrollo de Software</option>
-                                        <option value="OTHER">Otros Servicios</option>
-                                    </select>
-                                </div>
-
-                                <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
                                     <textarea
                                         name="description"
@@ -286,6 +296,18 @@ export default function ServiceCatalogList() {
                                         onChange={handleInputChange}
                                         className="input-field w-full resize-none"
                                         placeholder="Características, SLA, etc."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Impuestos del Cliente</label>
+                                    <input
+                                        type="text"
+                                        name="client_taxes"
+                                        value={formData.client_taxes}
+                                        onChange={handleInputChange}
+                                        className="input-field w-full"
+                                        placeholder="Ej. IVA 15%"
                                     />
                                 </div>
 

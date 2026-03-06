@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Server, Shield, Wifi, Database, Radio, Package, Trash2, Edit } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Server, Shield, Wifi, Database, Radio, Package, Trash2, Edit, Building2 } from 'lucide-react';
 import axios from 'axios';
 
 const catalogIcons = {
@@ -31,8 +31,11 @@ export default function ServicesList() {
         service: '',
         status: 'PROSPECTING',
         agreed_price: '',
+        nrc: '',
         start_date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        bandwidth: '',
+        service_location: ''
     });
 
     useEffect(() => {
@@ -53,7 +56,9 @@ export default function ServicesList() {
     const fetchCatalogs = async () => {
         try {
             const response = await axios.get('/api/services/catalog/');
-            setCatalogs(response.data.results ? response.data.results : response.data);
+            const data = response.data.results ? response.data.results : response.data;
+            const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+            setCatalogs(sorted);
         } catch (error) {
             console.error('Error fetching catalogs:', error);
         }
@@ -84,7 +89,7 @@ export default function ServicesList() {
             await axios.post('/api/services/client-services/', formData);
             fetchAssignedServices();
             setIsModalOpen(false);
-            setFormData({ client: '', service: '', status: 'PROSPECTING', agreed_price: '', start_date: new Date().toISOString().split('T')[0], notes: '' });
+            setFormData({ client: '', service: '', status: 'PROSPECTING', agreed_price: '', nrc: '', start_date: new Date().toISOString().split('T')[0], notes: '', bandwidth: '', service_location: '' });
             alert('Servicio asignado exitosamente.');
         } catch (error) {
             console.error('Error assigning service:', error);
@@ -102,7 +107,11 @@ export default function ServicesList() {
         try {
             await axios.patch(`/api/services/client-services/${editingService.id}/`, {
                 status: editingService.status,
-                agreed_price: editingService.agreed_price
+                agreed_price: editingService.agreed_price,
+                nrc: editingService.nrc,
+                bandwidth: editingService.bandwidth,
+                service_location: editingService.service_location,
+                notes: editingService.notes
             });
             fetchAssignedServices();
             setIsEditModalOpen(false);
@@ -157,6 +166,40 @@ export default function ServicesList() {
         const labelText = labels[status] || status;
 
         return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{labelText}</span>;
+    };
+
+    const getClientStatusBadge = (status) => {
+        if (status === 'Activo') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Activo</span>;
+        if (status === 'Inactivo') return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactivo</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{status}</span>;
+    };
+
+    const translateStatus = (status) => {
+        if (!status) return status;
+        const statusTranslations = {
+            'FIRST_MEETING': 'Primera Cita',
+            'CONTACTED': 'Contactado',
+            'OFFERED': 'Ofertado',
+            'FOLLOW_UP': 'Seguimiento',
+            'CLOSING_MEETING': 'Cita Cierre',
+            'ADJUDICATED': 'Adjudicado',
+            'TDR_ELABORATION': 'Elaboración de TDR',
+            'LOST_DEAL': 'Negocio Perdido',
+            'BACKLOG': 'Backlog',
+            'BILLED': 'Facturado',
+            'NEW_SERVICE': 'Servicio Nuevo',
+            'DOWN_GRADE': 'Down Grade',
+            'UP_GRADE': 'Up Grade',
+            'DEMO': 'Demo'
+        };
+
+        if (status.includes(' - ')) {
+            const parts = status.split(' - ');
+            const main = statusTranslations[parts[0]] || parts[0];
+            const sub = statusTranslations[parts[1]] || parts[1];
+            return `${main} - ${sub}`;
+        }
+        return statusTranslations[status] || status;
     };
 
     const uniqueManagers = [...new Set(clients.map(c => c.account_manager).filter(Boolean))];
@@ -257,12 +300,12 @@ export default function ServicesList() {
                     <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Servicio & Detalles</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Estado</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Monto / Precio</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Gerente de Cuenta</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fecha Inicio</th>
-                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CLIENTE</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SERVICIO & ESTADO</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">DETALLES OPERATIVOS</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">MONTO / PRECIO</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">FECHA INICIO</th>
+                                <th scope="col" className="relative px-6 py-3 tracking-wider"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
@@ -283,23 +326,75 @@ export default function ServicesList() {
                                     <tr key={service.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className={`flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-lg ${config.bg} ${config.color}`}>
-                                                    <Icon className="w-4 h-4" />
+                                                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-slate-100 border border-slate-200">
+                                                    <Building2 className="w-5 h-5 text-blue-500" />
                                                 </div>
-                                                <div className="ml-3">
-                                                    <div className="text-sm font-medium text-slate-900">{catAssigned ? catAssigned.name : `Servicio ID #${service.service}`}</div>
-                                                    <div className="text-xs text-slate-500">{clientAssigned ? clientAssigned.name : 'Cliente Desconocido'}</div>
+                                                <div className="ml-4">
+                                                    <div className="text-sm font-bold text-slate-900">{clientAssigned ? clientAssigned.name : 'Cliente Desconocido'}</div>
+                                                    <div className="text-xs text-slate-500">{clientAssigned ? (clientAssigned.legal_name || clientAssigned.tax_id) : '-'}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {getStatusBadge(service.status)}
+                                            <div className="flex items-start">
+                                                <div className={`mt-1 flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-lg ${config.bg} ${config.color}`}>
+                                                    <Icon className="w-4 h-4" />
+                                                </div>
+                                                <div className="ml-3">
+                                                    <div className="text-sm font-bold text-slate-900">
+                                                        {catAssigned ? catAssigned.name : `Servicio ID #${service.service}`}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 items-start mt-1">
+                                                        <div className="flex gap-1">
+                                                            {clientAssigned && getClientStatusBadge(clientAssigned.is_active ? 'Activo' : 'Inactivo')}
+                                                            {clientAssigned?.classification === 'PROSPECT' ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase">
+                                                                    {translateStatus(clientAssigned.prospect_status) || 'PROSPECTO'}
+                                                                </span>
+                                                            ) : clientAssigned ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
+                                                                    {translateStatus(clientAssigned.active_status) || 'ACTIVO'}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase">
+                                                            Service: {translateStatus(service.status)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
-                                            ${service.agreed_price}
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-slate-900 mb-1">
+                                                <span className="font-semibold text-slate-500">G:</span> {clientAssigned?.account_manager || 'N/A'}
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                {service.bandwidth && (
+                                                    <div className="text-[11px] text-slate-600">
+                                                        <span className="font-semibold">Vel:</span> {service.bandwidth} Mbps
+                                                    </div>
+                                                )}
+                                                {service.service_location && (
+                                                    <div className="text-[11px] text-slate-500 truncate max-w-[180px]" title={service.service_location}>
+                                                        <span className="font-semibold">Loc:</span> {service.service_location}
+                                                    </div>
+                                                )}
+                                                {service.notes && (
+                                                    <div className="text-[11px] text-slate-400 italic truncate max-w-[180px]" title={service.notes}>
+                                                        "{service.notes}"
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                                            {clientAssigned && clientAssigned.account_manager ? clientAssigned.account_manager : <span className="text-slate-400 italic">No asignado</span>}
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-slate-900 font-bold">
+                                                <span className="text-[10px] text-slate-400 font-normal mr-1">MRC:</span> ${service.agreed_price}
+                                            </div>
+                                            {service.nrc && Number(service.nrc) > 0 && (
+                                                <div className="text-xs text-slate-500">
+                                                    <span className="text-[10px] text-slate-400 mr-1">NRC:</span> ${service.nrc}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                                             {service.start_date}
@@ -347,32 +442,43 @@ export default function ServicesList() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6">
-                            <div className="grid grid-cols-1 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium leading-6 text-slate-900">Cliente Destino <span className="text-red-500">*</span></label>
-                                    <select required name="client" value={formData.client} onChange={handleInputChange} className="mt-1 input-field bg-white">
-                                        <option value="">-- Seleccionar --</option>
-                                        {clients.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium leading-6 text-slate-900">Tipo de Servicio <span className="text-red-500">*</span></label>
-                                    <select required name="service" value={formData.service} onChange={handleInputChange} className="mt-1 input-field bg-white">
-                                        <option value="">-- Seleccionar --</option>
-                                        {catalogs.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium leading-6 text-slate-900">Monto Mensual / Único <span className="text-red-500">*</span></label>
-                                        <input required type="number" step="0.01" name="agreed_price" value={formData.agreed_price} onChange={handleInputChange} className="mt-1 input-field" placeholder="1200.00" />
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Cliente Destino <span className="text-red-500">*</span></label>
+                                        <select required name="client" value={formData.client} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                                            <option value="">-- Seleccionar --</option>
+                                            {clients.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Tipo de Servicio <span className="text-red-500">*</span></label>
+                                        <select required name="service" value={formData.service} onChange={handleInputChange} className="mt-1 input-field bg-white">
+                                            <option value="">-- Seleccionar --</option>
+                                            {catalogs.map(s => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.internal_code ? `[${s.internal_code}] ` : ''}{s.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Monto Mensual (MRC) <span className="text-red-500">*</span></label>
+                                        <input required type="number" step="0.01" name="agreed_price" value={formData.agreed_price} onChange={handleInputChange} className="mt-1 input-field" placeholder="0.00" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Costo No Recurrente (NRC)</label>
+                                        <input type="number" step="0.01" name="nrc" value={formData.nrc} onChange={handleInputChange} className="mt-1 input-field" placeholder="0.00" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium leading-6 text-slate-900">Estado en Embudo</label>
                                         <select name="status" value={formData.status} onChange={handleInputChange} className="mt-1 input-field bg-white">
@@ -389,6 +495,19 @@ export default function ServicesList() {
                                             <option value="LOST">Negocio Perdido</option>
                                         </select>
                                     </div>
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Velocidad (Mbps)</label>
+                                        <input type="text" name="bandwidth" value={formData.bandwidth} onChange={handleInputChange} className="mt-1 input-field" placeholder="e.g. 50" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Ubicación del Servicio</label>
+                                        <input type="text" name="service_location" value={formData.service_location} onChange={handleInputChange} className="mt-1 input-field" placeholder="Dirección o Punto" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium leading-6 text-slate-900">Observaciones</label>
+                                    <textarea name="notes" rows={2} value={formData.notes} onChange={handleInputChange} className="mt-1 input-field" placeholder="Notas adicionales..."></textarea>
                                 </div>
                             </div>
 
@@ -406,70 +525,119 @@ export default function ServicesList() {
             )}
 
             {/* Modal de EDICIÓN de Estado y Monto */}
-            {isEditModalOpen && editingService && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
+            {
+                isEditModalOpen && editingService && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
 
-                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
-                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-slate-900">Actualizar Servicio</h3>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                <span className="sr-only">Cerrar</span>
-                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                        <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+                            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-slate-900">Actualizar Servicio</h3>
+                                <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                    <span className="sr-only">Cerrar</span>
+                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleEditSubmit} className="p-6">
+                                <div className="grid grid-cols-1 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Estado Actual en Embudo</label>
+                                        <select
+                                            name="status"
+                                            value={editingService.status}
+                                            onChange={(e) => setEditingService({ ...editingService, status: e.target.value })}
+                                            className="mt-1 input-field bg-white"
+                                        >
+                                            <option value="PROSPECTING">Prospección</option>
+                                            <option value="CONTACTED">Contactado</option>
+                                            <option value="FIRST_MEETING">Primera Cita</option>
+                                            <option value="OFFERED">Ofertado</option>
+                                            <option value="FOLLOW_UP">Seguimiento</option>
+                                            <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                            <option value="DEMO">Demo</option>
+                                            <option value="CONTRACT_SIGNED">Firma de Contrato</option>
+                                            <option value="BACKLOG">Backlog</option>
+                                            <option value="INSTALLED">Instalado (Activo)</option>
+                                            <option value="LOST">Negocio Perdido</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">Monto MRC ($)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                name="agreed_price"
+                                                value={editingService.agreed_price}
+                                                onChange={(e) => setEditingService({ ...editingService, agreed_price: e.target.value })}
+                                                className="mt-1 input-field"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">Monto NRC ($)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                name="nrc"
+                                                value={editingService.nrc || ''}
+                                                onChange={(e) => setEditingService({ ...editingService, nrc: e.target.value })}
+                                                className="mt-1 input-field"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">Velocidad (Mbps)</label>
+                                            <input
+                                                type="text"
+                                                name="bandwidth"
+                                                value={editingService.bandwidth || ''}
+                                                onChange={(e) => setEditingService({ ...editingService, bandwidth: e.target.value })}
+                                                className="mt-1 input-field"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium leading-6 text-slate-900">Ubicación</label>
+                                            <input
+                                                type="text"
+                                                name="service_location"
+                                                value={editingService.service_location || ''}
+                                                onChange={(e) => setEditingService({ ...editingService, service_location: e.target.value })}
+                                                className="mt-1 input-field"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium leading-6 text-slate-900">Observaciones</label>
+                                        <textarea
+                                            name="notes"
+                                            rows={2}
+                                            value={editingService.notes || ''}
+                                            onChange={(e) => setEditingService({ ...editingService, notes: e.target.value })}
+                                            className="mt-1 input-field"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
+                                    <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                        Cancelar
+                                    </button>
+                                    <button type="submit" className="btn-primary">
+                                        Guardar Cambios
+                                    </button>
+                                </div>
+                            </form>
                         </div>
-
-                        <form onSubmit={handleEditSubmit} className="p-6">
-                            <div className="grid grid-cols-1 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium leading-6 text-slate-900">Estado Actual en Embudo</label>
-                                    <select
-                                        name="status"
-                                        value={editingService.status}
-                                        onChange={(e) => setEditingService({ ...editingService, status: e.target.value })}
-                                        className="mt-1 input-field bg-white"
-                                    >
-                                        <option value="PROSPECTING">Prospección</option>
-                                        <option value="CONTACTED">Contactado</option>
-                                        <option value="FIRST_MEETING">Primera Cita</option>
-                                        <option value="OFFERED">Ofertado</option>
-                                        <option value="FOLLOW_UP">Seguimiento</option>
-                                        <option value="CLOSING_MEETING">Cita de Cierre</option>
-                                        <option value="DEMO">Demo</option>
-                                        <option value="CONTRACT_SIGNED">Firma de Contrato</option>
-                                        <option value="BACKLOG">Backlog</option>
-                                        <option value="INSTALLED">Instalado (Activo)</option>
-                                        <option value="LOST">Negocio Perdido</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium leading-6 text-slate-900">Monto / Precio ($)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        name="agreed_price"
-                                        value={editingService.agreed_price}
-                                        onChange={(e) => setEditingService({ ...editingService, agreed_price: e.target.value })}
-                                        className="mt-1 input-field"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
-                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
-                                    Cancelar
-                                </button>
-                                <button type="submit" className="btn-primary">
-                                    Guardar Cambios
-                                </button>
-                            </div>
-                        </form>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

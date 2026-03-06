@@ -16,6 +16,25 @@ class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('-created_at')
     serializer_class = ClientSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Client.objects.all().order_by('-created_at')
+        
+        if user.is_superuser:
+            return queryset
+            
+        try:
+            profile = user.profile
+            if profile.role and profile.role.name in ['Ventas', 'Gerente de Cuenta']:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                if not full_name:
+                    full_name = user.username
+                return queryset.filter(account_manager__icontains=full_name)
+        except Exception:
+            pass
+            
+        return queryset
+
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def update_prospect_status(self, request, pk=None):
         client = self.get_object()
@@ -38,6 +57,42 @@ class ClientViewSet(viewsets.ModelViewSet):
         history = ClientStatusHistory.objects.create(
             client=client,
             status=status_val,
+            reason=reason,
+            evidence=evidence,
+            nrc=nrc if nrc else None,
+            mrc=mrc if mrc else None,
+            custom_date=custom_date if custom_date else None
+        )
+        
+        serializer = ClientStatusHistorySerializer(history)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def update_active_status(self, request, pk=None):
+        client = self.get_object()
+        
+        status_val = request.data.get('status')
+        sub_status = request.data.get('sub_status')
+        reason = request.data.get('reason')
+        evidence = request.FILES.get('evidence')
+        nrc = request.data.get('nrc')
+        mrc = request.data.get('mrc')
+        custom_date = request.data.get('custom_date')
+        
+        if not status_val or not reason:
+            return Response({'error': 'Status and reason are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Update client status
+        client.active_status = status_val
+        client.save()
+        
+        # Format the combined status for history if NEW_SERVICE and sub_status is provided
+        history_status = f"Servicio Nuevo - {sub_status}" if status_val == 'NEW_SERVICE' and sub_status else status_val
+
+        # Create history record
+        history = ClientStatusHistory.objects.create(
+            client=client,
+            status=history_status,
             reason=reason,
             evidence=evidence,
             nrc=nrc if nrc else None,
@@ -139,6 +194,9 @@ class ImportClientsView(APIView):
                 region = get_col(row, ['REGION', 'REGIÓN'])
                 city = get_col(row, ['CIUDAD'])
                 segment = get_col(row, ['SEGMENTO'])
+                service_location = get_col(row, ['UBICACION DEL SERVICIO', 'UBICACIÓN DEL SERVICIO', 'UBICACION', 'UBICACIÓN'])[:255]
+                classification_str = get_col(row, ['CLASIFICACION DEL CLIENTE', 'CLASIFICACIÓN DEL CLIENTE', 'CLASIFICACION', 'CLASIFICACIÓN']).strip().upper()
+                classification = 'ACTIVE' if 'ACTIVO' in classification_str else 'PROSPECT'
                 account_manager = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])[:255]
                 
                 # We need tax_id and email. Will use dummy if empty.
@@ -160,8 +218,10 @@ class ImportClientsView(APIView):
                         region=region,
                         city=city,
                         segment=segment,
+                        service_location=service_location,
+                        classification=classification,
                         account_manager=account_manager,
-                        client_type='OTHER'
+                        # client_type is removed
                     )
                     client_created = True
                     created_clients += 1
@@ -172,6 +232,8 @@ class ImportClientsView(APIView):
                     if not client.region and region: client.region = region; changed = True
                     if not client.city and city: client.city = city; changed = True
                     if not client.segment and segment: client.segment = segment; changed = True
+                    if not client.service_location and service_location: client.service_location = service_location; changed = True
+                    if classification_str and client.classification != classification: client.classification = classification; changed = True
                     if not client.account_manager and account_manager: client.account_manager = account_manager; changed = True
                     if changed: client.save()
 
@@ -196,9 +258,14 @@ class ImportClientsView(APIView):
                     if not service_cat:
                         service_cat = ServiceCatalog.objects.create(
                             name=service_str,
-                            service_type='OTHER',
+                            description='Importado vía CSV',
                             base_price=0.00
                         )
+
+                    # Update Client's main type if not set
+                    if not client.client_type_new:
+                        client.client_type_new = service_cat
+                        client.save()
 
                     project_type = get_col(row, ['TIPO DE PROYECTO', 'PROYECTO'])
                     estado_str = get_col(row, ['ESTADO']).upper()

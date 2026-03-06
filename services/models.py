@@ -8,11 +8,18 @@ class ServiceType(models.TextChoices):
     OTHER = 'OTHER', 'Otros Servicios'
 
 class ServiceCatalog(models.Model):
-    name = models.CharField(max_length=255, verbose_name="Nombre del Servicio")
+    internal_code = models.CharField(max_length=100, verbose_name="Código Referencia Interna", blank=True, null=True)
+    name = models.CharField(max_length=255, verbose_name="Servicio")
     description = models.TextField(verbose_name="Descripción", blank=True, null=True)
-    service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.OTHER)
+    service_type = models.CharField(max_length=20, choices=ServiceType.choices, default=ServiceType.OTHER, blank=True, null=True)
+    client_taxes = models.CharField(max_length=255, verbose_name="Impuestos del Cliente", blank=True, null=True)
     base_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Base", default=0.00)
     base_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Base", default=0.00)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Catálogo de Servicio"
+        verbose_name_plural = "Catálogo de Servicios"
 
     def __str__(self):
         return self.name
@@ -38,7 +45,8 @@ class ClientService(models.Model):
     # Technical details
     ip_address = models.GenericIPAddressField(protocol='both', unpack_ipv4=False, blank=True, null=True, verbose_name="Dirección IP Asignada")
     rack_space = models.CharField(max_length=100, blank=True, null=True, verbose_name="Espacio en Rack")
-    bandwidth = models.CharField(max_length=100, blank=True, null=True, verbose_name="Ancho de Banda")
+    bandwidth = models.CharField(max_length=100, blank=True, null=True, verbose_name="Velocidad (Mbps)")
+    service_location = models.CharField(max_length=255, verbose_name="Ubicación del Servicio", blank=True, null=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PROSPECTING')
     agreed_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Acordado (MRC)")

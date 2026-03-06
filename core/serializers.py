@@ -13,7 +13,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['id', 'cedula', 'cargo', 'role', 'role_name']
+        fields = ['id', 'cedula', 'cargo', 'role', 'role_name', 'photo', 'birthdate', 'civil_status']
+        extra_kwargs = {
+            'photo': {'required': False, 'allow_null': True},
+            'birthdate': {'required': False, 'allow_null': True},
+            'civil_status': {'required': False, 'allow_null': True},
+            'cedula': {'required': False},
+            'cargo': {'required': False}
+        }
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(required=False)

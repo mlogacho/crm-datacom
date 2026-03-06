@@ -43,6 +43,35 @@ export const AuthProvider = ({ children }) => {
         setUserPermissions(null);
     };
 
+    // Auto-logout after 10 minutes of inactivity
+    useEffect(() => {
+        if (!userPermissions) return;
+
+        let timeout;
+        const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes
+
+        const resetTimer = () => {
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                console.log("Sesión finalizada por inactividad.");
+                logout();
+                window.location.href = '/login';
+            }, INACTIVITY_LIMIT);
+        };
+
+        // Events to track activity
+        const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+        events.forEach(event => document.addEventListener(event, resetTimer));
+
+        // Start timer
+        resetTimer();
+
+        return () => {
+            if (timeout) clearTimeout(timeout);
+            events.forEach(event => document.removeEventListener(event, resetTimer));
+        };
+    }, [userPermissions]);
+
     const hasViewPermission = (viewId) => {
         if (!userPermissions) return false;
         if (userPermissions.is_superuser) return true;

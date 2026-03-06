@@ -1,10 +1,10 @@
 from django.db import models
 
-class ClientType(models.TextChoices):
-    HOUSING = 'HOUSING', 'Housing'
-    TELECOM = 'TELECOM', 'Telecomunicaciones'
-    APP_DEV = 'APP_DEV', 'Desarrollo de Apps'
-    OTHER = 'OTHER', 'Otro'
+# class ClientType(models.TextChoices):
+#     HOUSING = 'HOUSING', 'Housing'
+#     TELECOM = 'TELECOM', 'Telecomunicaciones'
+#     APP_DEV = 'APP_DEV', 'Desarrollo de Apps'
+#     OTHER = 'OTHER', 'Otro'
 
 class ClientClassification(models.TextChoices):
     PROSPECT = 'PROSPECT', 'Prospecto'
@@ -20,21 +20,33 @@ class ProspectStatus(models.TextChoices):
     TDR_ELABORATION = 'TDR_ELABORATION', 'Elaboración de TDR'
     LOST_DEAL = 'LOST_DEAL', 'Negocio Perdido'
 
+class ActiveStatus(models.TextChoices):
+    BACKLOG = 'BACKLOG', 'Backlog'
+    BILLED = 'BILLED', 'Facturado'
+    NEW_SERVICE = 'NEW_SERVICE', 'Servicio Nuevo'
+    DOWN_GRADE = 'DOWN_GRADE', 'Down Grade'
+    UP_GRADE = 'UP_GRADE', 'Up Grade'
+    DEMO = 'DEMO', 'Demo'
+
 class Client(models.Model):
     name = models.CharField(max_length=255, verbose_name="Nombre Comercial")
     legal_name = models.CharField(max_length=255, verbose_name="Razón Social", blank=True, null=True)
     tax_id = models.CharField(max_length=50, verbose_name="RUC/NIT", unique=True)
     classification = models.CharField(max_length=20, choices=ClientClassification.choices, default=ClientClassification.PROSPECT, verbose_name="Clasificación")
     prospect_status = models.CharField(max_length=30, choices=ProspectStatus.choices, blank=True, null=True, verbose_name="Estado de Prospecto")
+    active_status = models.CharField(max_length=30, choices=ActiveStatus.choices, blank=True, null=True, verbose_name="Estado de Activo")
     email = models.EmailField(verbose_name="Correo Principal")
     phone = models.CharField(max_length=50, verbose_name="Teléfono Principal", blank=True, null=True)
     address = models.TextField(verbose_name="Dirección", blank=True, null=True)
-    client_type = models.CharField(max_length=20, choices=ClientType.choices, default=ClientType.OTHER)
+    client_type_new = models.ForeignKey('services.ServiceCatalog', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Tipo de Cliente")
+    # Old field to be replaced
+    # client_type = models.CharField(max_length=20, choices=ClientType.choices, default=ClientType.OTHER)
     
     # Legacy DB Fields
     region = models.CharField(max_length=100, verbose_name="Región", blank=True, null=True)
     city = models.CharField(max_length=100, verbose_name="Ciudad", blank=True, null=True)
     segment = models.CharField(max_length=100, verbose_name="Segmento", blank=True, null=True)
+    service_location = models.CharField(max_length=255, verbose_name="Ubicación del Servicio", blank=True, null=True)
     account_manager = models.CharField(max_length=255, verbose_name="Gerente de Cuenta", blank=True, null=True)
     
     is_active = models.BooleanField(default=True, verbose_name="Activo")
@@ -58,7 +70,7 @@ class Contact(models.Model):
 
 class ClientStatusHistory(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='status_history')
-    status = models.CharField(max_length=30, choices=ProspectStatus.choices, verbose_name="Estado")
+    status = models.CharField(max_length=100, verbose_name="Estado")
     reason = models.TextField(verbose_name="Razón")
     evidence = models.FileField(upload_to='prospect_evidence/', blank=True, null=True, verbose_name="Evidencia")
     nrc = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="NRC")
@@ -67,4 +79,4 @@ class ClientStatusHistory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha Sistema")
 
     def __str__(self):
-        return f"{self.client.name} - {self.get_status_display()} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+        return f"{self.client.name} - {self.status} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
