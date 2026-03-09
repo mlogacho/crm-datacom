@@ -14,7 +14,7 @@ import { useAuth } from './context/AuthContext';
 axios.defaults.baseURL = '/';
 
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem('authToken');
+  const token = sessionStorage.getItem('authToken');
   const { isLoading } = useAuth();
 
   if (!token) {

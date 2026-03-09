@@ -11,7 +11,16 @@ export const AuthProvider = ({ children }) => {
 
     const fetchPermissions = async () => {
         try {
-            const token = localStorage.getItem('authToken');
+            const token = sessionStorage.getItem('authToken');
+
+            // Verificación extra: si no hay cookie de sesión activa, limpiar storage
+            const hasSessionCookie = document.cookie.includes('crm_session_active=true');
+            if (token && !hasSessionCookie) {
+                console.log("Sesión de navegador finalizada. Forzando re-login.");
+                logout();
+                return;
+            }
+
             if (token) {
                 axios.defaults.headers.common['Authorization'] = `Token ${token}`;
                 const res = await axios.get('/api/core/user-permissions/');
@@ -28,17 +37,23 @@ export const AuthProvider = ({ children }) => {
     };
 
     useEffect(() => {
+        // Limpiar remanentes de la lógica anterior de localStorage
+        localStorage.removeItem('authToken');
         fetchPermissions();
     }, []);
 
     const login = async (token) => {
         setIsLoading(true);
-        localStorage.setItem('authToken', token);
+        sessionStorage.setItem('authToken', token);
+        // Establecer cookie de sesión (se borra al cerrar el proceso del navegador)
+        document.cookie = "crm_session_active=true; path=/; SameSite=Strict";
         await fetchPermissions();
     };
 
     const logout = () => {
-        localStorage.removeItem('authToken');
+        sessionStorage.removeItem('authToken');
+        // Eliminar cookie de sesión
+        document.cookie = "crm_session_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         delete axios.defaults.headers.common['Authorization'];
         setUserPermissions(null);
     };

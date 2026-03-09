@@ -15,6 +15,9 @@ class ClientSerializer(serializers.ModelSerializer):
     contacts = ContactSerializer(many=True, read_only=True)
     status_history = ClientStatusHistorySerializer(many=True, read_only=True)
     assigned_services = serializers.SerializerMethodField()
+    total_services_count = serializers.SerializerMethodField()
+    total_mrc = serializers.SerializerMethodField()
+    total_nrc = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -23,7 +26,8 @@ class ClientSerializer(serializers.ModelSerializer):
             'prospect_status', 'active_status', 'email', 'phone',
             'address', 'client_type_new', 'region', 'city',
             'segment', 'service_location', 'account_manager', 'is_active', 'created_at',
-            'updated_at', 'contacts', 'status_history', 'assigned_services'
+            'updated_at', 'contacts', 'status_history', 'assigned_services',
+            'total_services_count', 'total_mrc', 'total_nrc'
         ]
 
     def create(self, validated_data):
@@ -64,3 +68,14 @@ class ClientSerializer(serializers.ModelSerializer):
             }
             for s in obj.services.all()
         ]
+
+    def get_total_services_count(self, obj):
+        return obj.services.count()
+
+    def get_total_mrc(self, obj):
+        from django.db.models import Sum
+        return obj.services.aggregate(total=Sum('agreed_price'))['total'] or 0.00
+
+    def get_total_nrc(self, obj):
+        from django.db.models import Sum
+        return obj.services.aggregate(total=Sum('nrc'))['total'] or 0.00

@@ -38,7 +38,17 @@ export default function ClientsList() {
     // Active Status Modal State
     const [isActiveStatusModalOpen, setIsActiveStatusModalOpen] = useState(false);
     const [activeStatusClient, setActiveStatusClient] = useState(null);
-    const [activeStatusFormData, setActiveStatusFormData] = useState({ state: 'BACKLOG', sub_state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
+    const [activeStatusFormData, setActiveStatusFormData] = useState({
+        state: 'BACKLOG',
+        sub_state: 'FIRST_MEETING',
+        reason: '',
+        evidence: null,
+        nrc: '',
+        mrc: '',
+        bandwidth: '',
+        service_location: '',
+        custom_date: new Date().toISOString().slice(0, 16)
+    });
     // Services Modal State
     const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
     const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -54,6 +64,33 @@ export default function ClientsList() {
         service_location: '',
         notes: ''
     });
+
+    // Update Service Modal State
+    const [isUpdateServiceModalOpen, setIsUpdateServiceModalOpen] = useState(false);
+    const [editingService, setEditingService] = useState(null);
+    const [updateServiceFormData, setUpdateServiceFormData] = useState({
+        status: '',
+        agreed_price: '',
+        nrc: '',
+        bandwidth: '',
+        service_location: '',
+        notes: '',
+        new_note: ''
+    });
+
+    // Work Order Modal State
+    const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
+    const [workOrderFormData, setWorkOrderFormData] = useState({
+        order_number: '',
+        client_name: '',
+        service_name: '',
+        service_location: '',
+        login: '',
+        estimated_date: '',
+        observations: ''
+    });
+
+
 
     // Form state (usado para Nuevo y para Editar)
     const initialFormState = {
@@ -130,7 +167,11 @@ export default function ClientsList() {
                 city: client.city || '',
                 segment: client.segment || '',
                 service_location: client.service_location || '',
-                account_manager: client.account_manager || ''
+                account_manager: client.account_manager || '',
+                assigned_services: client.assigned_services || [],
+                total_services_count: client.total_services_count || 0,
+                total_mrc: client.total_mrc || 0,
+                total_nrc: client.total_nrc || 0
             }));
             setClients(mappedClients);
         } catch (error) {
@@ -380,6 +421,105 @@ export default function ClientsList() {
         }
     };
 
+    const handleUpdateServiceSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const now = new Date();
+            const timestamp = now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+
+            let updatedNotes = updateServiceFormData.notes || '';
+            if (updateServiceFormData.new_note && updateServiceFormData.new_note.trim() !== '') {
+                const separator = updatedNotes ? "\n---\n" : "";
+                updatedNotes = `${updatedNotes}${separator}[${timestamp}]: ${updateServiceFormData.new_note}`;
+            }
+
+            const payload = {
+                status: updateServiceFormData.status,
+                agreed_price: updateServiceFormData.agreed_price,
+                nrc: updateServiceFormData.nrc || 0,
+                bandwidth: updateServiceFormData.bandwidth,
+                service_location: updateServiceFormData.service_location,
+                notes: updatedNotes
+            };
+
+            await axios.patch(`/api/services/client-services/${editingService.id}/`, payload);
+            fetchClientServices(servicesClient.id);
+
+            if (updateServiceFormData.status === 'BACKLOG') {
+                try {
+                    const seqRes = await axios.get('/api/services/work-orders/next_sequence/');
+                    const { next_order_number, next_login_sequence } = seqRes.data;
+
+                    const clientInitials = servicesClient.name
+                        .split(' ')
+                        .filter(w => w.length > 0)
+                        .map(w => w[0])
+                        .join('')
+                        .toUpperCase();
+
+                    const location = updateServiceFormData.service_location || 'SIN_UBICACION';
+                    const serviceName = services.find(s => s.id === editingService.service)?.name || 'SERV';
+                    const formattedLogin = `${clientInitials}_${location.replace(/\s+/g, '_')}_${serviceName.replace(/\s+/g, '_')}_${next_login_sequence}`;
+
+                    setWorkOrderFormData({
+                        order_number: `Orden de Instalación #${next_order_number}`,
+                        client_name: servicesClient.name,
+                        service_name: serviceName,
+                        service_location: updateServiceFormData.service_location,
+                        login: formattedLogin,
+                        estimated_date: editingService.work_order ? editingService.work_order.estimated_date?.slice(0, 16) : '',
+                        observations: editingService.work_order ? editingService.work_order.observations : ''
+                    });
+
+                    setIsUpdateServiceModalOpen(false);
+                    setIsWorkOrderModalOpen(true);
+                } catch (err) {
+                    console.error("Error preparing Work Order:", err);
+                    alert("Error al preparar la Orden de Trabajo.");
+                }
+            } else {
+                // If not backlog, log change to history normally
+                const historyPayload = new FormData();
+                historyPayload.append('status', updateServiceFormData.status);
+                historyPayload.append('reason', `Actualización de servicio: ${services.find(s => s.id === editingService.service)?.name || 'N/A'}. ${updateServiceFormData.new_note || ''}`);
+                historyPayload.append('mrc', updateServiceFormData.agreed_price);
+                historyPayload.append('nrc', updateServiceFormData.nrc || 0);
+
+                await axios.post(`/api/clients/clients/${servicesClient.id}/update_active_status/`, historyPayload);
+                fetchClients(); // Refresh client data to show updated history later
+
+                setIsUpdateServiceModalOpen(false);
+                alert("Servicio actualizado correctamente.");
+            }
+        } catch (error) {
+            console.error("Error updating service:", error);
+            alert("Error al actualizar el servicio.");
+        }
+    };
+
+    const handleWorkOrderSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                client_service: editingService.id,
+                order_number: workOrderFormData.order_number,
+                login: workOrderFormData.login,
+                estimated_date: workOrderFormData.estimated_date,
+                observations: workOrderFormData.observations
+            };
+
+            await axios.post('/api/services/work-orders/', payload);
+
+            fetchClients();
+            setIsWorkOrderModalOpen(false);
+            setIsUpdateServiceModalOpen(false);
+            alert("Orden de Trabajo guardada con éxito y registrada en el historial.");
+        } catch (error) {
+            console.error("Error saving work order:", error);
+            alert("Error al guardar la Orden de Trabajo.");
+        }
+    };
+
 
     const handleActiveStatusSubmit = async (e) => {
         e.preventDefault();
@@ -403,7 +543,9 @@ export default function ClientsList() {
         if (activeStatusFormData.custom_date) {
             data.append('custom_date', activeStatusFormData.custom_date);
         }
-        if (activeStatusFormData.state === 'NEW_SERVICE' && activeStatusFormData.sub_state === 'OFFERED') {
+
+        // Include financial fields for BACKLOG as well as NEW_SERVICE - OFFERED
+        if ((activeStatusFormData.state === 'NEW_SERVICE' && activeStatusFormData.sub_state === 'OFFERED') || activeStatusFormData.state === 'BACKLOG') {
             if (activeStatusFormData.nrc) data.append('nrc', activeStatusFormData.nrc);
             if (activeStatusFormData.mrc) data.append('mrc', activeStatusFormData.mrc);
         }
@@ -412,14 +554,96 @@ export default function ClientsList() {
             await axios.post(`/api/clients/clients/${activeStatusClient.id}/update_active_status/`, data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+
+            // If BACKLOG, we also need to handle the service level update to trigger the Work Order
+            if (activeStatusFormData.state === 'BACKLOG') {
+                try {
+                    // Try to find an existing service for this client or create the primary one
+                    const servicesRes = await axios.get(`/api/services/client-services/?client=${activeStatusClient.id}`);
+                    let targetService = servicesRes.data.results?.[0] || servicesRes.data?.[0];
+
+                    if (!targetService && activeStatusClient.client_type_new) {
+                        // Create service
+                        const createRes = await axios.post('/api/services/client-services/', {
+                            client: activeStatusClient.id,
+                            service: activeStatusClient.client_type_new,
+                            agreed_price: activeStatusFormData.mrc || 0,
+                            nrc: activeStatusFormData.nrc || 0,
+                            start_date: new Date().toISOString().split('T')[0],
+                            status: 'BACKLOG',
+                            bandwidth: activeStatusFormData.bandwidth,
+                            service_location: activeStatusFormData.service_location,
+                            notes: activeStatusFormData.reason
+                        });
+                        targetService = createRes.data;
+                    } else if (targetService) {
+                        // Update existing service
+                        const patchRes = await axios.patch(`/api/services/client-services/${targetService.id}/`, {
+                            status: 'BACKLOG',
+                            agreed_price: activeStatusFormData.mrc || targetService.agreed_price,
+                            nrc: activeStatusFormData.nrc || targetService.nrc,
+                            bandwidth: activeStatusFormData.bandwidth || targetService.bandwidth,
+                            service_location: activeStatusFormData.service_location || targetService.service_location,
+                            notes: `${targetService.notes || ''}\n[${new Date().toLocaleString()}]: Cambio de estado cliente a BACKLOG. ${activeStatusFormData.reason}`
+                        });
+                        targetService = patchRes.data;
+                    }
+
+                    if (targetService) {
+                        setEditingService(targetService);
+
+                        const seqRes = await axios.get('/api/services/work-orders/next_sequence/');
+                        const { next_order_number, next_login_sequence } = seqRes.data;
+
+                        const clientInitials = activeStatusClient.name
+                            .split(' ')
+                            .filter(w => w.length > 0)
+                            .map(w => w[0])
+                            .join('')
+                            .toUpperCase();
+
+                        const location = activeStatusFormData.service_location || targetService.service_location || 'SIN_UBICACION';
+                        const sName = services.find(s => s.id === targetService.service)?.name || 'SERV';
+                        const formattedLogin = `${clientInitials}_${location.replace(/\s+/g, '_')}_${sName.replace(/\s+/g, '_')}_${next_login_sequence}`;
+
+                        setWorkOrderFormData({
+                            order_number: `Orden de Instalación #${next_order_number}`,
+                            client_name: activeStatusClient.name,
+                            service_name: sName,
+                            service_location: location,
+                            login: formattedLogin,
+                            estimated_date: targetService.work_order ? targetService.work_order.estimated_date?.slice(0, 16) : '',
+                            observations: targetService.work_order ? targetService.work_order.observations : ''
+                        });
+
+                        setIsActiveStatusModalOpen(false);
+                        setIsWorkOrderModalOpen(true);
+                        fetchClients();
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Error triggering WO from client status:", err);
+                }
+            }
+
             fetchClients();
             setIsActiveStatusModalOpen(false);
             setActiveStatusClient(null);
-            setActiveStatusFormData({ state: 'BACKLOG', sub_state: 'FIRST_MEETING', reason: '', evidence: null, nrc: '', mrc: '', custom_date: '' });
-            alert('¡Estado de cliente activo actualizado!');
+            setActiveStatusFormData({
+                state: 'BACKLOG',
+                sub_state: 'FIRST_MEETING',
+                reason: '',
+                evidence: null,
+                nrc: '',
+                mrc: '',
+                bandwidth: '',
+                service_location: '',
+                custom_date: new Date().toISOString().slice(0, 16)
+            });
+            alert('¡Estado de cliente actualizado!');
         } catch (error) {
             console.error('Error updating active status:', error);
-            alert('Error al actualizar el estado activo.');
+            alert('Error al actualizar el estado.');
         }
     };
 
@@ -739,7 +963,9 @@ export default function ClientsList() {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CLIENTE</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SERVICIO & ESTADO</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">DETALLES OPERATIVOS</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CONTACTO PRINCIPAL</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">SERVICIOS TOTALES</th>
+                                <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">TOTAL MENSUAL (MRC)</th>
+                                <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">TOTAL UNICO (NRC)</th>
                                 <th scope="col" className="relative px-6 py-3 tracking-wider"><span className="sr-only">Acciones</span></th>
                             </tr>
                         </thead>
@@ -761,16 +987,38 @@ export default function ClientsList() {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="space-y-3">
                                             {client.assigned_services && client.assigned_services.length > 0 ? (
-                                                client.assigned_services.map((as, idx) => (
-                                                    <div key={idx} className={idx > 0 ? "pt-2 border-t border-slate-50" : ""}>
-                                                        <div className="text-sm font-bold text-slate-900 mb-1">{as.service_name}</div>
+                                                client.assigned_services.length === 1 ? (
+                                                    <div>
+                                                        <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
                                                         <div className="flex flex-wrap gap-1">
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                                {translateStatus(as.status)}
+                                                                {translateStatus(client.assigned_services[0].status)}
                                                             </span>
                                                         </div>
                                                     </div>
-                                                ))
+                                                ) : (
+                                                    <div>
+                                                        <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
+                                                        <div className="flex flex-wrap gap-1 mb-2">
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                                {translateStatus(client.assigned_services[0].status)}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setServicesClient(client);
+                                                                fetchClientServices(client.id);
+                                                                setIsSummaryModalOpen(true);
+                                                            }}
+                                                            className="text-[11px] font-extrabold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group transition-all"
+                                                        >
+                                                            <span>VER TODOS LOS SERVICIOS ({client.assigned_services.length})</span>
+                                                            <svg className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                )
                                             ) : (
                                                 <div className="text-sm font-bold text-slate-900 mb-1">
                                                     {services.find(s => s.id === client.client_type_new)?.name || 'S/N'}
@@ -797,9 +1045,14 @@ export default function ClientsList() {
                                         <div className="text-xs text-slate-500 mt-1">{client.region} {client.region && client.city ? '-' : ''} {client.city}</div>
                                         <div className="text-xs text-slate-500">{client.segment}{client.service_location && ` | ${client.service_location}`}</div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-slate-900">{client.email}</div>
-                                        <div className="text-xs text-slate-500 mt-1 truncate max-w-[200px]">{client.phone}</div>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="text-lg font-black text-slate-900">{client.total_services_count}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                        <div className="text-sm font-bold text-emerald-600">${Number(client.total_mrc || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                        <div className="text-sm font-bold text-blue-600">${Number(client.total_nrc || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex items-center justify-end gap-3">
@@ -905,7 +1158,7 @@ export default function ClientsList() {
                             ))}
                             {filteredClients.length === 0 && (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-slate-500">
+                                    <td colSpan="7" className="px-6 py-8 text-center text-sm text-slate-500">
                                         No se encontraron clientes que coincidan con los filtros.
                                     </td>
                                 </tr>
@@ -1245,6 +1498,29 @@ export default function ClientsList() {
                                     </select>
                                 </div>
 
+                                {activeStatusFormData.state === 'BACKLOG' && (
+                                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium leading-6 text-slate-900">MRC ($) *</label>
+                                                <input type="number" step="0.01" min="0" name="mrc" value={activeStatusFormData.mrc || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-blue-200" placeholder="0.00" required />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium leading-6 text-slate-900">NRC ($)</label>
+                                                <input type="number" step="0.01" min="0" name="nrc" value={activeStatusFormData.nrc || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-blue-200" placeholder="0.00" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium leading-6 text-slate-900">Velocidad (Mbps)</label>
+                                                <input type="text" name="bandwidth" value={activeStatusFormData.bandwidth || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-blue-200" placeholder="e.g. 100" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium leading-6 text-slate-900">Ubicación</label>
+                                                <input type="text" name="service_location" value={activeStatusFormData.service_location || ''} onChange={handleActiveStatusFormChange} className="mt-1 input-field border-blue-200" placeholder="Ubicación del servicio..." />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {activeStatusFormData.state === 'NEW_SERVICE' && (
                                     <div className="p-4 bg-orange-50 border border-orange-100 rounded-lg space-y-4">
                                         <div>
@@ -1507,7 +1783,27 @@ export default function ClientsList() {
                                                     const sName = services.find(s => s.id === item.service)?.name || 'N/A';
                                                     return (
                                                         <tr key={item.id} className="hover:bg-slate-50/50">
-                                                            <td className="px-4 py-3 text-sm font-medium text-slate-800">{sName}</td>
+                                                            <td
+                                                                className="px-4 py-3 text-sm font-medium text-slate-800 cursor-pointer hover:text-indigo-600 transition-colors flex items-center gap-2 group"
+                                                                onClick={() => {
+                                                                    setEditingService(item);
+                                                                    setUpdateServiceFormData({
+                                                                        status: item.status,
+                                                                        agreed_price: item.agreed_price,
+                                                                        nrc: item.nrc,
+                                                                        bandwidth: item.bandwidth || '',
+                                                                        service_location: item.service_location || '',
+                                                                        notes: item.notes || '',
+                                                                        new_note: ''
+                                                                    });
+                                                                    setIsUpdateServiceModalOpen(true);
+                                                                }}
+                                                            >
+                                                                <span>{sName}</span>
+                                                                <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                </svg>
+                                                            </td>
                                                             <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[150px]" title={item.service_location}>{item.service_location || 'S/N'}</td>
                                                             <td className="px-4 py-3 text-center">
                                                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${item.status === 'INSTALLED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -1563,6 +1859,214 @@ export default function ClientsList() {
                                 Cerrar Resumen
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {isUpdateServiceModalOpen && editingService && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsUpdateServiceModalOpen(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-slate-800">Actualizar Servicio v2.0</h3>
+                            <button onClick={() => setIsUpdateServiceModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2">
+                                <Plus className="w-6 h-6 rotate-45" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateServiceSubmit} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Estado Actual en Embudo</label>
+                                <select
+                                    value={updateServiceFormData.status}
+                                    onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, status: e.target.value })}
+                                    className="input-field w-full bg-white"
+                                    required
+                                >
+                                    <option value="BACKLOG">Backlog</option>
+                                    <option value="INSTALLED">Instalado</option>
+                                    <option value="PROSPECTING">Prospección</option>
+                                    <option value="CONTACTED">Contactado</option>
+                                    <option value="FIRST_MEETING">Primera Cita</option>
+                                    <option value="OFFERED">Ofertado</option>
+                                    <option value="FOLLOW_UP">Seguimiento</option>
+                                    <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                    <option value="DEMO">Demo</option>
+                                    <option value="CONTRACT_SIGNED">Firma de Contrato</option>
+                                    <option value="LOST">Negocio Perdido</option>
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Monto MRC ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={updateServiceFormData.agreed_price}
+                                        onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, agreed_price: e.target.value })}
+                                        className="input-field w-full"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Monto NRC ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={updateServiceFormData.nrc}
+                                        onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, nrc: e.target.value })}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Velocidad (Mbps)</label>
+                                    <input
+                                        type="text"
+                                        value={updateServiceFormData.bandwidth}
+                                        onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, bandwidth: e.target.value })}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Ubicación</label>
+                                    <input
+                                        type="text"
+                                        value={updateServiceFormData.service_location}
+                                        onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, service_location: e.target.value })}
+                                        className="input-field w-full"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Historial de Observaciones</label>
+                                <div className="mb-2 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100 text-[11px] text-slate-600 max-h-32 overflow-y-auto whitespace-pre-wrap shadow-inner">
+                                    {updateServiceFormData.notes || "No hay notas previas en el sistema."}
+                                </div>
+                                <textarea
+                                    value={updateServiceFormData.new_note}
+                                    onChange={e => setUpdateServiceFormData({ ...updateServiceFormData, new_note: e.target.value })}
+                                    className="input-field w-full border-indigo-200 focus:ring-indigo-500 focus:border-indigo-500"
+                                    rows={3}
+                                    placeholder="Agrega una nueva nota que se guardará con fecha y hora..."
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUpdateServiceModalOpen(false)}
+                                    className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-800"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                                >
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Work Order Modal */}
+            {isWorkOrderModalOpen && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsWorkOrderModalOpen(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up border border-slate-200">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">{workOrderFormData.order_number}</h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Generación de Orden de Trabajo</p>
+                            </div>
+                            <button onClick={() => setIsWorkOrderModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 transition-colors">
+                                <Plus className="w-6 h-6 rotate-45" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleWorkOrderSubmit} className="p-8 space-y-6">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre del Cliente</label>
+                                    <div className="p-3 bg-slate-50 rounded-lg text-sm font-bold text-slate-700 border border-slate-100 italic">
+                                        {workOrderFormData.client_name}
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Servicio</label>
+                                    <div className="p-3 bg-slate-50 rounded-lg text-sm font-bold text-slate-700 border border-slate-100">
+                                        {workOrderFormData.service_name}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ubicación del Servicio</label>
+                                    <div className="p-3 bg-slate-50 rounded-lg text-sm font-bold text-slate-700 border border-slate-100">
+                                        {workOrderFormData.service_location || 'S/N'}
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Login Sugerido</label>
+                                    <input
+                                        type="text"
+                                        value={workOrderFormData.login}
+                                        onChange={e => setWorkOrderFormData({ ...workOrderFormData, login: e.target.value })}
+                                        className="w-full p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm font-mono font-bold text-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha y Hora Estimada Instalación</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={workOrderFormData.estimated_date}
+                                        onChange={e => setWorkOrderFormData({ ...workOrderFormData, estimated_date: e.target.value })}
+                                        className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Observaciones</label>
+                                <textarea
+                                    value={workOrderFormData.observations}
+                                    onChange={e => setWorkOrderFormData({ ...workOrderFormData, observations: e.target.value })}
+                                    className="w-full p-3 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                    rows={3}
+                                    placeholder="Detalles adicionales para la cuadrilla técnica..."
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-4 pt-6 border-t border-slate-50">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsWorkOrderModalOpen(false)}
+                                    className="px-6 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    Descartar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-10 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center gap-2"
+                                >
+                                    <span>Guardar Orden de Trabajo</span>
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -65,3 +65,18 @@ class ClientService(models.Model):
 
     def __str__(self):
         return f"{self.client.name} - {self.service.name}"
+
+class WorkOrder(models.Model):
+    client_service = models.OneToOneField(ClientService, on_delete=models.CASCADE, related_name='work_order')
+    order_number = models.CharField(max_length=100, verbose_name="Orden de Instalación #")
+    login = models.CharField(max_length=255, verbose_name="Login")
+    estimated_date = models.DateTimeField(verbose_name="Fecha y Hora Estimada Instalación")
+    observations = models.TextField(blank=True, null=True, verbose_name="Observaciones")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Orden de Trabajo"
+        verbose_name_plural = "Órdenes de Trabajo"
+
+    def __str__(self):
+        return f"{self.order_number} - {self.client_service.client.name}"

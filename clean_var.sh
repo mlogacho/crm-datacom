@@ -6,38 +6,56 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "Iniciando limpieza segura del directorio /var..."
+echo "========================================="
+echo "Iniciando LIMPIEZA PROFUNDA de /var..."
+echo "Objetivo: Reducir uso de disco significativamente"
+echo "========================================="
 
-# 1. Limpiar la caché del gestor de paquetes APT (paquetes .deb descargados)
-echo "[1/4] Limpiando la caché de apt..."
+# 1. Limpiar la caché del gestor de paquetes APT
+echo "[1/6] Limpiando caché de apt y paquetes innecesarios..."
 apt-get clean
-apt-get autoremove -y
+apt-get autoremove --purge -y
+apt-get autoclean
 
-# 2. Limpiar logs del sistema de systemd (journalctl)
-echo "[2/4] Limitando el tamaño de los logs de journalctl a 100M y 3 días..."
-journalctl --vacuum-time=3d
-journalctl --vacuum-size=100M
+# 2. Limpiar logs del sistema (journalctl) - Más agresivo (1 día)
+echo "[2/6] Reduciendo logs de journalctl al mínimo (1 día)..."
+journalctl --vacuum-time=1d
+journalctl --vacuum-size=50M
 
-# 3. Rotar y truncar (vaciar) archivos de registro (logs) tradicionales
-echo "[3/4] Limpiando archivos de logs antiguos y vaciando los actuales..."
-# Eliminar logs comprimidos antiguos (más de 3 días)
-find /var/log -type f -name "*.gz" -mtime +3 -delete
-find /var/log -type f -name "*.[0-9]" -mtime +3 -delete
+# 3. Limpiar archivos de registro (logs) tradicionales
+echo "[3/6] Eliminando logs comprimidos y vaciando logs activos..."
+find /var/log -type f -name "*.gz" -delete
+find /var/log -type f -name "*.[0-9]" -delete
 
-# Truncar los logs actuales sin borrarlos (para no romper servicios que los tienen abiertos)
+# Truncar logs actuales
 find /var/log -type f -name "*.log" -exec truncate -s 0 {} \;
-[ -f /var/log/syslog ] && truncate -s 0 /var/log/syslog
-[ -f /var/log/messages ] && truncate -s 0 /var/log/messages
-[ -f /var/log/auth.log ] && truncate -s 0 /var/log/auth.log
-[ -f /var/log/kern.log ] && truncate -s 0 /var/log/kern.log
-[ -f /var/log/daemon.log ] && truncate -s 0 /var/log/daemon.log
+for f in syslog messages auth.log kern.log daemon.log mail.log; do
+    [ -f /var/log/$f ] && truncate -s 0 /var/log/$f
+done
 
-# 4. Limpiar /var/tmp (archivos temporales con más de 7 días de antigüedad)
-echo "[4/4] Limpiando archivos temporales en /var/tmp..."
-find /var/tmp -type f -mtime +7 -delete
+# 4. Limpiar /var/tmp y /var/cache
+echo "[4/6] Limpiando archivos temporales y caché del sistema..."
+find /var/tmp -type f -atime +2 -delete
+# Limpieza selectiva de caché (solo archivos, no directorios)
+find /var/cache -type f -atime +7 -delete
+
+# 5. LIMPIEZA DE DOCKER (El mayor consumidor de espacio)
+if command -v docker >/dev/null 2>&1; then
+    echo "[5/6] Detectado Docker. Limpiando contenedores, redes e imágenes huérfanas..."
+    # Limpia todo lo que no esté en uso (fuerza la limpieza)
+    docker system prune -f
+    # Opcional: docker image prune -a -f # Para borrar TODAS las imágenes sin contenedores activos
+    echo "Sugerencia: Si aún falta espacio, corre 'docker system prune -af --volumes' manualmente."
+else
+    echo "[5/6] Docker no está instalado. Saltando..."
+fi
+
+# 6. Identificar archivos grandes restantes (Informativo)
+echo "[6/6] Analizando archivos grandes restantes en /var (Top 5)..."
+du -ah /var | sort -rh | head -n 5
 
 echo "========================================="
-echo "¡Limpieza completada con éxito!"
-echo "Espacio en disco actual en /var:"
+echo "¡Limpieza PROFUNDA completada!"
+echo "Estado actual del disco en /var:"
 df -h /var
 echo "========================================="
