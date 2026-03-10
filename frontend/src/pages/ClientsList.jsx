@@ -195,20 +195,21 @@ export default function ClientsList() {
     const translateStatus = (status) => {
         if (!status) return status;
         const statusTranslations = {
-            'FIRST_MEETING': 'Primera Cita',
+            'PROSPECTING': 'Prospección',
             'CONTACTED': 'Contactado',
+            'FIRST_MEETING': 'Primera Cita',
             'OFFERED': 'Ofertado',
             'FOLLOW_UP': 'Seguimiento',
-            'CLOSING_MEETING': 'Cita Cierre',
-            'ADJUDICATED': 'Adjudicado',
-            'TDR_ELABORATION': 'Elaboración de TDR',
-            'LOST_DEAL': 'Negocio Perdido',
+            'CLOSING_MEETING': 'Cita de Cierre',
+            'DEMO': 'Demo',
+            'CONTRACT_SIGNED': 'Firma de Contrato',
             'BACKLOG': 'Backlog',
+            'INSTALLED': 'Instalado',
             'BILLED': 'Facturado',
             'NEW_SERVICE': 'Servicio Nuevo',
             'DOWN_GRADE': 'Down Grade',
             'UP_GRADE': 'Up Grade',
-            'DEMO': 'Demo'
+            'LOST': 'Negocio Perdido'
         };
 
         if (status.includes(' - ')) {
@@ -692,6 +693,36 @@ export default function ClientsList() {
         );
     };
 
+    const getDetailedStatusBadge = (status, classification) => {
+        const bgColors = {
+            'PROSPECTING': 'bg-blue-100 text-blue-800',
+            'CONTACTED': 'bg-indigo-100 text-indigo-800',
+            'FIRST_MEETING': 'bg-purple-100 text-purple-800',
+            'OFFERED': 'bg-yellow-100 text-yellow-800',
+            'FOLLOW_UP': 'bg-orange-100 text-orange-800',
+            'CLOSING_MEETING': 'bg-pink-100 text-pink-800',
+            'DEMO': 'bg-cyan-100 text-cyan-800',
+            'CONTRACT_SIGNED': 'bg-emerald-100 text-emerald-800',
+            'BACKLOG': 'bg-emerald-100 text-emerald-800',
+            'INSTALLED': 'bg-emerald-100 text-emerald-800',
+            'BILLED': 'bg-green-100 text-green-800',
+            'NEW_SERVICE': 'bg-blue-50 text-blue-700',
+            'DOWN_GRADE': 'bg-amber-100 text-amber-800',
+            'UP_GRADE': 'bg-violet-100 text-violet-800',
+            'LOST': 'bg-red-100 text-red-800',
+        };
+
+        const colorClass = bgColors[status] || (classification === 'PROSPECT' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800');
+        const defaultLabel = classification === 'PROSPECT' ? 'PROSPECTO' : 'ACTIVO';
+        const labelText = translateStatus(status) || defaultLabel;
+
+        return (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-current/20 uppercase ${colorClass}`}>
+                {labelText}
+            </span>
+        );
+    };
+
     // Extraer valores únicos para los dropdowns de filtros
     const uniqueRegions = [...new Set(clients.map(c => c.region).filter(Boolean))];
     const uniqueSegments = [...new Set(clients.map(c => c.segment).filter(Boolean))];
@@ -991,18 +1022,14 @@ export default function ClientsList() {
                                                     <div>
                                                         <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
                                                         <div className="flex flex-wrap gap-1">
-                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                                {translateStatus(client.assigned_services[0].status)}
-                                                            </span>
+                                                            {getDetailedStatusBadge(client.assigned_services[0].status)}
                                                         </div>
                                                     </div>
                                                 ) : (
                                                     <div>
                                                         <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
                                                         <div className="flex flex-wrap gap-1 mb-2">
-                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                                {translateStatus(client.assigned_services[0].status)}
-                                                            </span>
+                                                            {getDetailedStatusBadge(client.assigned_services[0].status)}
                                                         </div>
                                                         <button
                                                             onClick={() => {
@@ -1027,15 +1054,10 @@ export default function ClientsList() {
                                             <div className="flex flex-col gap-1 items-start mt-1">
                                                 <div className="flex gap-1">
                                                     {getStatusBadge(client.status)}
-                                                    {client.classification === 'PROSPECT' ? (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase">
-                                                            {translateStatus(client.prospect_status) || 'PROSPECTO'}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
-                                                            {translateStatus(client.active_status) || 'ACTIVO'}
-                                                        </span>
-                                                    )}
+                                                    {client.classification === 'PROSPECT' 
+                                                        ? getDetailedStatusBadge(client.prospect_status, 'PROSPECT')
+                                                        : getDetailedStatusBadge(client.active_status, 'ACTIVE')
+                                                    }
                                                 </div>
                                             </div>
                                         </div>
@@ -1489,12 +1511,21 @@ export default function ClientsList() {
                                 <div>
                                     <label className="block text-sm font-medium leading-6 text-slate-900">Estado de Cliente Activo <span className="text-red-500">*</span></label>
                                     <select name="state" value={activeStatusFormData.state} onChange={handleActiveStatusFormChange} required className="mt-1 input-field bg-white">
+                                        <option value="PROSPECTING">Prospección</option>
+                                        <option value="CONTACTED">Contactado</option>
+                                        <option value="FIRST_MEETING">Primera Cita</option>
+                                        <option value="OFFERED">Ofertado</option>
+                                        <option value="FOLLOW_UP">Seguimiento</option>
+                                        <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                        <option value="DEMO">Demo</option>
+                                        <option value="CONTRACT_SIGNED">Firma de Contrato</option>
                                         <option value="BACKLOG">Backlog</option>
+                                        <option value="INSTALLED">Instalado</option>
                                         <option value="BILLED">Facturado</option>
                                         <option value="NEW_SERVICE">Servicio Nuevo</option>
                                         <option value="DOWN_GRADE">Down Grade</option>
                                         <option value="UP_GRADE">Up Grade</option>
-                                        <option value="DEMO">Demo</option>
+                                        <option value="LOST">Negocio Perdido</option>
                                     </select>
                                 </div>
 
@@ -1806,9 +1837,7 @@ export default function ClientsList() {
                                                             </td>
                                                             <td className="px-4 py-3 text-sm text-slate-600 truncate max-w-[150px]" title={item.service_location}>{item.service_location || 'S/N'}</td>
                                                             <td className="px-4 py-3 text-center">
-                                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${item.status === 'INSTALLED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                                                                    {translateStatus(item.status)}
-                                                                </span>
+                                                                {getDetailedStatusBadge(item.status)}
                                                             </td>
                                                             <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">${Number(item.agreed_price || 0).toFixed(2)}</td>
                                                             <td className="px-4 py-3 text-right text-sm font-medium text-slate-500">${Number(item.nrc || 0).toFixed(2)}</td>

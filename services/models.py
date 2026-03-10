@@ -63,6 +63,36 @@ class ClientService(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        # Determine if this is a change to status
+        is_new = self.pk is None
+        old_status = None
+        if not is_new:
+            try:
+                old_instance = ClientService.objects.get(pk=self.pk)
+                old_status = old_instance.status
+            except ClientService.DoesNotExist:
+                pass
+        
+        # Save current instance
+        super().save(*args, **kwargs)
+        
+        # Sync with client if status changed or new service
+        if is_new or old_status != self.status:
+            client = self.client
+            # Sync to active_status or prospect_status depending on current classification
+            if client.classification == 'ACTIVE':
+                client.active_status = self.status
+            else:
+                # If it's a prospect, we try to map to prospect_status if it exists there
+                # Otherwise we might upgrade the client or just set it if we want full sync
+                client.prospect_status = self.status
+            
+            # To be thorough, if a service becomes INSTALLED, CONTRACT_SIGNED or BACKLOG, 
+            # maybe the client should be considered ACTIVE? 
+            # But let's stick to the user's specific request about the "estado" (status).
+            client.save()
+
     def __str__(self):
         return f"{self.client.name} - {self.service.name}"
 

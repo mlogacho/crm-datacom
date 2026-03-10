@@ -59,14 +59,14 @@ class ClientSerializer(serializers.ModelSerializer):
         return client
 
     def get_assigned_services(self, obj):
-        # Using the related name 'services' from ClientService
+        # Using the related name 'services' from ClientService, ordered by last update
         return [
             {
                 "id": s.id,
                 "service_name": s.service.name,
                 "status": s.status
             }
-            for s in obj.services.all()
+            for s in obj.services.all().order_by('-updated_at')
         ]
 
     def get_total_services_count(self, obj):

@@ -21,12 +21,21 @@ class ProspectStatus(models.TextChoices):
     LOST_DEAL = 'LOST_DEAL', 'Negocio Perdido'
 
 class ActiveStatus(models.TextChoices):
+    PROSPECTING = 'PROSPECTING', 'Prospección'
+    CONTACTED = 'CONTACTED', 'Contactado'
+    FIRST_MEETING = 'FIRST_MEETING', 'Primera Cita'
+    OFFERED = 'OFFERED', 'Ofertado'
+    FOLLOW_UP = 'FOLLOW_UP', 'Seguimiento'
+    CLOSING_MEETING = 'CLOSING_MEETING', 'Cita de Cierre'
+    DEMO = 'DEMO', 'Demo'
+    CONTRACT_SIGNED = 'CONTRACT_SIGNED', 'Firma de Contrato'
     BACKLOG = 'BACKLOG', 'Backlog'
+    INSTALLED = 'INSTALLED', 'Instalado'
     BILLED = 'BILLED', 'Facturado'
     NEW_SERVICE = 'NEW_SERVICE', 'Servicio Nuevo'
     DOWN_GRADE = 'DOWN_GRADE', 'Down Grade'
     UP_GRADE = 'UP_GRADE', 'Up Grade'
-    DEMO = 'DEMO', 'Demo'
+    LOST = 'LOST', 'Negocio Perdido'
 
 class Client(models.Model):
     name = models.CharField(max_length=255, verbose_name="Nombre Comercial")
