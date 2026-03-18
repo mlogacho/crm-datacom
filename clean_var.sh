@@ -197,8 +197,8 @@ echo -e "${GREEN}  ✔ Docker limpiado${NC}"
 # ──────────────────────────────────────────────────────────────
 echo -e "${CYAN}[10/10] 💥 Eliminando crash dumps, cores y archivos basura...${NC}"
 
-# Core dumps
-find / -name "core" -type f -size +1M -delete 2>/dev/null
+# Core dumps (Restringido para no colapsar el disco)
+find /var /tmp /home -xdev -name "core" -type f -size +1M -delete 2>/dev/null
 find /var/crash -type f -delete 2>/dev/null
 find /var/lib/systemd/coredump -type f -delete 2>/dev/null
 
@@ -206,9 +206,9 @@ find /var/lib/systemd/coredump -type f -delete 2>/dev/null
 rm -rf /root/.cache/thumbnails 2>/dev/null
 find /home -type d -name "thumbnails" -path "*/.cache/thumbnails" -exec rm -rf {} + 2>/dev/null
 
-# Archivos de swap temporales de editores (vim, nano)
-find / -name "*.swp" -not -path "/proc/*" -delete 2>/dev/null
-find / -name "*~" -not -path "/proc/*" -not -path "/sys/*" -size +1M -delete 2>/dev/null
+# Archivos de swap temporales de editores (vim, nano) (Restringido)
+find /var /tmp /home -xdev -name "*.swp" -delete 2>/dev/null
+find /var /tmp /home -xdev -name "*~" -size +1M -delete 2>/dev/null
 
 echo -e "${GREEN}  ✔ Archivos basura eliminados${NC}"
 

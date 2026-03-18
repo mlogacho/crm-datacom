@@ -7,6 +7,7 @@ import ClientsList from './pages/ClientsList';
 import ServicesList from './pages/ServicesList';
 import ServiceCatalogList from './pages/ServiceCatalogList';
 import Settings from './pages/Settings';
+import Billing from './pages/Billing';
 import Login from './pages/Login';
 import { useAuth } from './context/AuthContext';
 
@@ -66,6 +67,7 @@ function App() {
           <Route path="services" element={<PermissionGuard viewId="services"><ServicesList /></PermissionGuard>} />
           <Route path="catalog" element={<PermissionGuard viewId="catalog"><ServiceCatalogList /></PermissionGuard>} />
           <Route path="settings" element={<PermissionGuard viewId="settings"><Settings /></PermissionGuard>} />
+          <Route path="billing" element={<PermissionGuard viewId="billing"><Billing /></PermissionGuard>} />
           <Route path="*" element={
             <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Módulo en Construcción</h2>

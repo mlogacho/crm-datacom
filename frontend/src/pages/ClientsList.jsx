@@ -869,7 +869,7 @@ export default function ClientsList() {
 
             <div className="col-span-1 md:col-span-2 flex items-center gap-2 mt-2">
                 <input type="checkbox" id="is_active" name="is_active" checked={formData.is_active} onChange={handleInputChange} className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500" />
-                <label htmlFor="is_active" className="text-sm font-medium text-slate-900">Cliente Activo en el Sistema</label>
+                {/* v2 */}<label htmlFor="is_active" className="text-sm font-medium text-slate-900">Cuenta Activa</label>
             </div>
 
             <div className="space-y-4 md:col-span-2 mt-2">
@@ -1010,7 +1010,15 @@ export default function ClientsList() {
                                                 <Building2 className="w-5 h-5 text-blue-500" />
                                             </div>
                                             <div className="ml-4">
-                                                <div className="text-sm font-bold text-slate-900">{client.name}</div>
+                                                <div
+                                                    className="text-sm font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+                                                    onClick={() => {
+                                                        setServicesClient(client);
+                                                        fetchClientServices(client.id);
+                                                        setIsSummaryModalOpen(true);
+                                                    }}
+                                                    title="Ver Resumen de Servicios"
+                                                >{client.name}</div>
                                                 <div className="text-xs text-slate-500">{client.legal_name || client.tax_id}</div>
                                             </div>
                                         </div>
@@ -1021,16 +1029,10 @@ export default function ClientsList() {
                                                 client.assigned_services.length === 1 ? (
                                                     <div>
                                                         <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {getDetailedStatusBadge(client.assigned_services[0].status)}
-                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <div>
                                                         <div className="text-sm font-bold text-slate-900 mb-1">{client.assigned_services[0].service_name}</div>
-                                                        <div className="flex flex-wrap gap-1 mb-2">
-                                                            {getDetailedStatusBadge(client.assigned_services[0].status)}
-                                                        </div>
                                                         <button
                                                             onClick={() => {
                                                                 setServicesClient(client);
@@ -1053,11 +1055,16 @@ export default function ClientsList() {
                                             )}
                                             <div className="flex flex-col gap-1 items-start mt-1">
                                                 <div className="flex gap-1">
-                                                    {getStatusBadge(client.status)}
-                                                    {client.classification === 'PROSPECT' 
-                                                        ? getDetailedStatusBadge(client.prospect_status, 'PROSPECT')
-                                                        : getDetailedStatusBadge(client.active_status, 'ACTIVE')
-                                                    }
+                                                    {(() => {
+                                                        const history = client.status_history;
+                                                        if (history && history.length > 0) {
+                                                            const lastStatus = history[history.length - 1].status;
+                                                            return getDetailedStatusBadge(lastStatus, client.classification);
+                                                        }
+                                                        return client.classification === 'PROSPECT'
+                                                            ? getDetailedStatusBadge(client.prospect_status, 'PROSPECT')
+                                                            : getDetailedStatusBadge(client.active_status, 'ACTIVE');
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>
@@ -1354,6 +1361,7 @@ export default function ClientsList() {
                                         <option value="CLOSING_MEETING">Cita Cierre</option>
                                         <option value="ADJUDICATED">Adjudicado</option>
                                         <option value="TDR_ELABORATION">Elaboración de TDR</option>
+                                        <option value="CONTRACT_SIGNED">Firma de Contrato</option>
                                         <option value="LOST_DEAL">Negocio Perdido</option>
                                     </select>
                                 </div>
@@ -1564,6 +1572,7 @@ export default function ClientsList() {
                                                 <option value="CLOSING_MEETING">Cita Cierre</option>
                                                 <option value="ADJUDICATED">Adjudicado</option>
                                                 <option value="TDR_ELABORATION">Elaboración de TDR</option>
+                                                <option value="CONTRACT_SIGNED">Firma de Contrato</option>
                                                 <option value="LOST_DEAL">Negocio Perdido</option>
                                             </select>
                                         </div>
@@ -1744,9 +1753,29 @@ export default function ClientsList() {
                                         {clientServicesList.map(item => {
                                             const serviceName = services.find(s => s.id === item.service)?.name || 'Servicio Desconocido';
                                             return (
-                                                <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                                                    <div>
-                                                        <div className="font-bold text-slate-900">{serviceName}</div>
+                                                <div key={item.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors group">
+                                                    <div
+                                                        className="flex-1 cursor-pointer"
+                                                        onClick={() => {
+                                                            setEditingService(item);
+                                                            setUpdateServiceFormData({
+                                                                status: item.status,
+                                                                agreed_price: item.agreed_price,
+                                                                nrc: item.nrc || '',
+                                                                bandwidth: item.bandwidth || '',
+                                                                service_location: item.service_location || '',
+                                                                notes: item.notes || '',
+                                                                new_note: ''
+                                                            });
+                                                            setIsUpdateServiceModalOpen(true);
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">{serviceName}</div>
+                                                            <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                            </svg>
+                                                        </div>
                                                         <div className="flex flex-wrap gap-4 mt-1">
                                                             <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">MRC:</span> ${item.agreed_price}</div>
                                                             <div className="text-xs text-slate-500"><span className="font-semibold text-slate-700">Estado:</span> {translateStatus(item.status)}</div>
@@ -1756,7 +1785,7 @@ export default function ClientsList() {
                                                     </div>
                                                     <button
                                                         onClick={() => deleteClientService(item.id)}
-                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-2"
                                                     >
                                                         <Trash2 className="w-5 h-5" />
                                                     </button>
