@@ -1,26 +1,165 @@
+# ==============================================================================
+# PYTHON & DJANGO
+# ==============================================================================
+
 # Entornos virtuales
 venv/
 env/
-.env
+ENV/
+.venv
 
 # Archivos de caché y compilados de Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+*.cover
+.hypothesis/
+.eggs/
 
 # Base de datos local
 db.sqlite3
+*.db
+
+# Migraciones (personalizadas, si es necesario ignorar)
+# migrations/
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# ==============================================================================
+# DJANGO & ARCHIVOS ESTÁTICOS
+# ==============================================================================
+
+# Archivos estáticos recolectados
+static/
+staticfiles/
+
+# Archivos de medios subidos
+media/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# ==============================================================================
+# LOGS & TEMPORALES
+# ==============================================================================
 
 # Logs
 *.log
+*.log.*
 server.log
+debug.log
 
-# Frontend (Node.js)
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# ==============================================================================
+# EDITOR & IDE
+# ==============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.vim
+.DS_Store
+
+# ==============================================================================
+# FRONTEND (NODE.JS / NPM / VUE)
+# ==============================================================================
+
+# Node.js
 frontend/node_modules/
 frontend/dist/
 frontend/build/
-.npm/
+frontend/.cache/
+.npm
+npm-debug.log
+yarn-error.log
 
-# Sistema operativo
+# Artifact folders
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# ==============================================================================
+# SISTEMA OPERATIVO
+# ==============================================================================
+
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+.vscode-st3
+
+# Windows
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+.directory
+
+# ==============================================================================
+# IDE TEMPORAL
+# ==============================================================================
+
+# Eclipse
+.project
+.pydevproject
+.settings/
+
+# PyBuilder
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+
+# ==============================================================================
+# OTROS
+# ==============================================================================
+
+# Archivos de datos
+*.pickle
+*.pkl
+*.csv
+
+# Archivos compilados
+dist/
+build/
