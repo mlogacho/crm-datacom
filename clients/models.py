@@ -1,3 +1,11 @@
+"""
+Modelos de la app de clientes.
+
+Define las entidades principales del módulo comercial:
+- Client: representa un prospecto o cliente activo de DataCom.
+- Contact: contacto asociado a un Cliente.
+- ClientStatusHistory: auditoría de cambios de estado con evidencia adjunta.
+"""
 from django.db import models
 
 # class ClientType(models.TextChoices):

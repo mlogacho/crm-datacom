@@ -1,0 +1,50 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos de caché y compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de datos local
+db.sqlite3
+
+# Logs
+*.log
+server.log
+
+# Frontend (Node.js)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.npm/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de respaldo
+*.bak
+*.bak_*
+
+# Build antiguo del frontend
+frontend/dist_old/
+
+# Archivos estáticos recolectados (Django collectstatic)
+static_collected/
+
+# Archivos multimedia subidos por usuarios
+media/
+
+# Archivos ofimáticos locales
+*.xlsx
+*.xls
+*.csv
+
+# Scripts de mantenimiento de servidor (no pertenecen al repo)
+fix_docker.sh
+cleanup_var.sh
+clean_var.sh
+populate_catalog.py

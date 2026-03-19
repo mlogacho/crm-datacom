@@ -1,3 +1,10 @@
+"""
+Modelos de la app de facturación.
+
+- Invoice: factura emitida a un cliente.
+- InvoiceItem: ítem de línea dentro de una factura.
+- BillingRecord: registro mensual de cargos MRC/NRC por cliente.
+"""
 from django.db import models
 from clients.models import Client
 

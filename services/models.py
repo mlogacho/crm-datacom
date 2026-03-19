@@ -1,3 +1,13 @@
+"""
+Modelos de la app de servicios.
+
+Gestiona el catálogo de servicios y su asignación a clientes:
+- ServiceCatalog: catálogo maestro de productos y servicios de DataCom.
+- ClientService: servicio asignado a un cliente con embudo de 11 estados.
+  El método save() sincroniza automáticamente el estado del cliente.
+- WorkOrder: orden de trabajo vinculada a un ClientService instalado.
+  El número de orden y el login PPPoE se generan automáticamente.
+"""
 from django.db import models
 from clients.models import Client
 

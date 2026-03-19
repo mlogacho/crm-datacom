@@ -1,3 +1,10 @@
+"""
+Modelos de la app core (usuarios, roles y autenticación).
+
+- Role: define un conjunto de módulos del frontend accesibles (allowed_views).
+- UserProfile: extiende el User de Django con datos de perfil, rol y secreto TOTP
+  para autenticación de doble factor (2FA compatible con Google Authenticator).
+"""
 from django.db import models
 from django.contrib.auth.models import User
 
