@@ -1,0 +1,117 @@
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+
+const AuthContext = createContext();
+
+export const useAuth = () => useContext(AuthContext);
+
+// SSO: procesar sso_token de la URL de forma SÍNCRONA, antes de que React
+// renderice. ProtectedRoute lee sessionStorage directamente durante el render;
+// si procesamos el token en un useEffect (asíncrono) ya es demasiado tarde
+// porque ProtectedRoute ya redirigió a /login en el primer render.
+(function processSSOToken() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const ssoToken = params.get('sso_token');
+        if (!ssoToken) return;
+        sessionStorage.setItem('authToken', ssoToken);
+        document.cookie = 'crm_session_active=true; path=/; SameSite=Strict';
+        // Limpiar el token de la URL sin agregar entrada al historial
+        const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', cleanUrl);
+    } catch (e) {
+        // Ignorar silenciosamente — el flujo normal continuará
+    }
+})();
+
+export const AuthProvider = ({ children }) => {
+    const [userPermissions, setUserPermissions] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchPermissions = async () => {
+        try {
+            const token = sessionStorage.getItem('authToken');
+
+            // Verificación extra: si no hay cookie de sesión activa, limpiar storage
+            const hasSessionCookie = document.cookie.includes('crm_session_active=true');
+            if (token && !hasSessionCookie) {
+                console.log("Sesión de navegador finalizada. Forzando re-login.");
+                logout();
+                return;
+            }
+
+            if (token) {
+                axios.defaults.headers.common['Authorization'] = `Token ${token}`;
+                const res = await axios.get('/api/core/user-permissions/');
+                setUserPermissions(res.data);
+            } else {
+                setUserPermissions(null);
+            }
+        } catch (error) {
+            console.error("Error fetching permissions:", error);
+            setUserPermissions(null);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        // Limpiar remanentes de la lógica anterior de localStorage
+        localStorage.removeItem('authToken');
+        fetchPermissions();
+    }, []);
+
+    const login = async (token) => {
+        setIsLoading(true);
+        sessionStorage.setItem('authToken', token);
+        // Establecer cookie de sesión (se borra al cerrar el proceso del navegador)
+        document.cookie = "crm_session_active=true; path=/; SameSite=Strict";
+        await fetchPermissions();
+    };
+
+    const logout = () => {
+        sessionStorage.removeItem('authToken');
+        // Eliminar cookie de sesión
+        document.cookie = "crm_session_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        delete axios.defaults.headers.common['Authorization'];
+        setUserPermissions(null);
+    };
+
+    // Auto-logout después de 10 minutos de inactividad
+    useEffect(() => {
+        if (!userPermissions) return;
+
+        let timeout;
+        const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutos
+
+        const resetTimer = () => {
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                console.log("Sesión finalizada por inactividad.");
+                logout();
+                window.location.href = '/login';
+            }, INACTIVITY_LIMIT);
+        };
+
+        const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+        events.forEach(event => document.addEventListener(event, resetTimer));
+        resetTimer();
+
+        return () => {
+            if (timeout) clearTimeout(timeout);
+            events.forEach(event => document.removeEventListener(event, resetTimer));
+        };
+    }, [userPermissions]);
+
+    const hasViewPermission = (viewId) => {
+        if (!userPermissions) return false;
+        if (userPermissions.is_superuser) return true;
+        return userPermissions.allowed_views.includes(viewId);
+    };
+
+    return (
+        <AuthContext.Provider value={{ userPermissions, isLoading, login, logout, hasViewPermission }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
