@@ -33,7 +33,7 @@ python3 -m venv "$VENV_DIR"
 # 4. Estáticos de Django
 echo "[4/6] Recolectando archivos estáticos..."
 # Solo si STATIC_ROOT está configurado, si no, ignorar
-"$VENV_DIR/bin/python" manage.py collectstatic --no-input --quiet || echo "⚠️ Skip collectstatic"
+"$VENV_DIR/bin/python" manage.py collectstatic --no-input || echo "⚠️ Skip collectstatic"
 
 # 5. Migraciones
 echo "[5/6] Aplicando migraciones..."
