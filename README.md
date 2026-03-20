@@ -62,8 +62,17 @@ https://github.com/mlogacho/crm-datacom
 
 ## Instalacion rapida
 
-- **Desarrollo**: `pip install -r requirements.txt` y `python manage.py runserver`
+- **Desarrollo**: `pip install -r requirements.txt` y `npm install && npm run dev`
 - **Producción**: `sudo bash /var/www/crm-datacom/deploy.sh` (actualización automatizada)
+
+## Autenticación y Seguridad
+
+El CRM DataCom utiliza un sistema de **Single Sign-On (SSO)** centralizado. El portal de login local está inhabilitado por diseño.
+- **Acceso mediante**: ERP Datacom (WebISO) en puerto 8081.
+- **Flujo**: El CRM captura el `sso_token` desde la URL al retornar del portal ERP.
+- **Sesión**: Se gestiona mediante `sessionStorage` para mayor seguridad en entornos corporativos.
+
+Consulte [SSO_INTEGRATION.md](docs/SSO_INTEGRATION.md) para detalles técnicos.
 
 ## Estructura de carpetas (actual)
 
