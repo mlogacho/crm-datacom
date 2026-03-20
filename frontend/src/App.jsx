@@ -16,13 +16,19 @@ axios.defaults.baseURL = '/';
 
 function ProtectedRoute({ children }) {
   const token = sessionStorage.getItem('authToken');
+  // SSO: Verificar si el token viene en la URL (pasado por ERP Datacom)
+  const params = new URLSearchParams(window.location.search);
+  const ssoToken = params.get('sso_token');
+  const activeToken = token || ssoToken;
   const { isLoading } = useAuth();
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  if (!activeToken) {
+    // Reducción drástica: En lugar de ir a /login interno del CRM, vamos al ERP
+    window.location.href = 'http://10.11.121.58:8081';
+    return null;
   }
 
-  axios.defaults.headers.common['Authorization'] = `Token ${token}`;
+  axios.defaults.headers.common['Authorization'] = `Token ${activeToken}`;
 
   if (isLoading) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Verificando sesión...</div>;

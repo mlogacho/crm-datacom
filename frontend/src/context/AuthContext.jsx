@@ -5,6 +5,25 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+// SSO: procesar sso_token de la URL de forma SÍNCRONA, antes de que React
+// renderice. ProtectedRoute lee sessionStorage directamente durante el render;
+// si procesamos el token en un useEffect (asíncrono) ya es demasiado tarde
+// porque ProtectedRoute ya redirigió a /login en el primer render.
+(function processSSOToken() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const ssoToken = params.get('sso_token');
+        if (!ssoToken) return;
+        sessionStorage.setItem('authToken', ssoToken);
+        document.cookie = 'crm_session_active=true; path=/; SameSite=Strict';
+        // Limpiar el token de la URL sin agregar entrada al historial
+        const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', cleanUrl);
+    } catch (e) {
+        // Ignorar silenciosamente — el flujo normal continuará
+    }
+})();
+
 export const AuthProvider = ({ children }) => {
     const [userPermissions, setUserPermissions] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -68,9 +87,9 @@ export const AuthProvider = ({ children }) => {
         const resetTimer = () => {
             if (timeout) clearTimeout(timeout);
             timeout = setTimeout(() => {
-                console.log("Sesión finalizada por inactividad.");
+                console.log("Sesión finalizada por inactividad. Redirigiendo a ERP.");
                 logout();
-                window.location.href = '/login';
+                window.location.href = 'http://10.11.121.58:8081';
             }, INACTIVITY_LIMIT);
         };
 
