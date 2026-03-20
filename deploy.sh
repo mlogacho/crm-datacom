@@ -1,77 +1,49 @@
 #!/bin/bash
 # =============================================================================
-# deploy.sh - Script de actualización del CRM DataCom en producción
+# deploy.sh - Script de actualización COMPLETO (Backend & Frontend)
 # =============================================================================
-# Uso:
-#   sudo bash /var/www/crm-datacom/deploy.sh
-#
-# Este script realiza los siguientes pasos en orden:
-#   1. Sincroniza el código desde GitHub (origin/main)
-#   2. Recrea el entorno virtual Python
-#   3. Instala/actualiza dependencias desde requirements.txt
-#   4. Aplica migraciones pendientes de la base de datos
-#   5. Reinicia el servicio gunicorn-crm
-# =============================================================================
-
-set -e  # Detener ejecución si cualquier comando falla
+set -e
 
 CRM_DIR="/var/www/crm-datacom"
 VENV_DIR="$CRM_DIR/venv"
 SERVICE="gunicorn-crm"
 
-echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║        CRM DataCom — Deploy de Producción       ║"
-echo "╚══════════════════════════════════════════════════╝"
-echo ""
+echo "🚀 Iniciando despliegue en $CRM_DIR..."
 
-# ─── PASO 1: Actualizar código ───────────────────────────────────────────────
-echo "[1/5] Actualizando código desde GitHub..."
+# 1. Actualizar código
 cd "$CRM_DIR"
+echo "[1/6] Sincronizando con GitHub..."
 git fetch origin
 git reset --hard origin/main
-echo "      ✓ Código actualizado → $(git log --oneline -1)"
 
-# ─── PASO 2: Recrear entorno virtual ─────────────────────────────────────────
-echo "[2/5] Recreando entorno virtual Python..."
+# 2. Reconstruir Frontend
+echo "[2/6] Construyendo Frontend (Vite)..."
+cd "$CRM_DIR/frontend"
+# Usamos --no-fund --no-audit para minimizar logs y tiempo
+npm install --no-fund --no-audit --quiet
+npm run build
+cd "$CRM_DIR"
+
+# 3. Entorno Virtual Python
+echo "[3/6] Recreando entorno virtual..."
 rm -rf "$VENV_DIR"
 python3 -m venv "$VENV_DIR"
-echo "      ✓ Virtualenv creado con $(python3 --version)"
+"$VENV_DIR/bin/pip" install --quiet -r requirements.txt gunicorn==25.1.0 Pillow pyotp qrcode
 
-# ─── PASO 3: Instalar dependencias ───────────────────────────────────────────
-echo "[3/5] Instalando dependencias..."
-"$VENV_DIR/bin/pip" install --quiet \
-    -r "$CRM_DIR/requirements.txt" \
-    gunicorn==25.1.0 \
-    Pillow==11.3.0 \
-    pyotp==2.9.0 \
-    qrcode==8.2
-echo "      ✓ Dependencias instaladas"
+# 4. Estáticos de Django
+echo "[4/6] Recolectando archivos estáticos..."
+# Solo si STATIC_ROOT está configurado, si no, ignorar
+"$VENV_DIR/bin/python" manage.py collectstatic --no-input --quiet || echo "⚠️ Skip collectstatic"
 
-# ─── PASO 4: Migraciones de base de datos ────────────────────────────────────
-echo "[4/5] Aplicando migraciones de base de datos..."
-"$VENV_DIR/bin/python" "$CRM_DIR/manage.py" migrate --no-input
-echo "      ✓ Migraciones aplicadas"
+# 5. Migraciones
+echo "[5/6] Aplicando migraciones..."
+"$VENV_DIR/bin/python" manage.py migrate --no-input
 
-# ─── PASO 5: Reiniciar servicio ──────────────────────────────────────────────
-echo "[5/5] Reiniciando servicio Gunicorn..."
+# 6. Reiniciar Servicios
+echo "[6/6] Reiniciando Gunicorn..."
 systemctl restart "$SERVICE"
-sleep 3
-STATUS=$(systemctl is-active "$SERVICE")
-if [ "$STATUS" = "active" ]; then
-    echo "      ✓ Servicio $SERVICE activo y corriendo"
-else
-    echo "      ✗ ERROR: El servicio $SERVICE no arrancó (status: $STATUS)"
-    systemctl status "$SERVICE" --no-pager | tail -10
-    exit 1
-fi
+sleep 2
+systemctl is-active "$SERVICE"
 
-# ─── RESUMEN ─────────────────────────────────────────────────────────────────
-echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║  ✅ Deploy completado exitosamente               ║"
-echo "╚══════════════════════════════════════════════════╝"
-echo "   Commit: $(git log --oneline -1)"
-echo "   Servicio: $STATUS"
-echo "   Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
-echo ""
+echo "✅ DESPLIEGUE EXITOSO"
+echo "Recuerda limpiar el caché de tu navegador (Ctrl+F5) para ver los cambios."
