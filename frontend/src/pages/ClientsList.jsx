@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList, Server, FileText } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList, Server, FileText, Download } from 'lucide-react';
 import axios from 'axios';
 
 export default function ClientsList() {
@@ -1311,7 +1311,7 @@ export default function ClientsList() {
                                                 <label htmlFor="file-upload" className="relative cursor-pointer font-bold text-blue-600 focus-within:outline-none hover:text-blue-700">
                                                     <span>Arrastra tu archivo aquí</span>
                                                     <span className="font-normal text-slate-500 ml-1">o haz clic para seleccionar</span>
-                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv" onChange={(e) => setImportFile(e.target.files[0])} />
+                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv,.xlsx,.xls" onChange={(e) => setImportFile(e.target.files[0])} />
                                                 </label>
                                             </div>
                                             <p className="text-xs text-slate-400 mt-2">
