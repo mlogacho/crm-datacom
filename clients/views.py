@@ -1,3 +1,10 @@
+"""Client management API views.
+
+This module exposes commercial operations for CRM client lifecycle management,
+including prospect status tracking, active client status updates, contacts,
+and bulk import from CSV files.
+"""
+
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,10 +20,26 @@ from datetime import date
 import re
 
 class ClientViewSet(viewsets.ModelViewSet):
+    """CRUD API for clients and commercial status transitions.
+
+    Commercial action:
+    - Manage client records (prospects and active customers).
+    - Register status updates in history through custom actions.
+
+    Permissions:
+    - Global API permission policy is `IsAuthenticated` from DRF settings.
+    - Superusers can access all clients.
+    - Sales roles are filtered to assigned account manager records.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = Client.objects.all().order_by('-created_at')
     serializer_class = ClientSerializer
 
     def get_queryset(self):
+        """Return clients visible to the authenticated user role."""
         user = self.request.user
         queryset = Client.objects.all().order_by('-created_at')
         
@@ -37,6 +60,14 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def update_prospect_status(self, request, pk=None):
+        """Update prospect status and create a status history audit record.
+
+        Commercial action:
+        - Moves a prospect in the sales pipeline and stores reason/evidence.
+
+        Response type:
+        - JSON with created history object.
+        """
         client = self.get_object()
         
         status_val = request.data.get('status')
@@ -69,6 +100,15 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def update_active_status(self, request, pk=None):
+        """Update active client status and persist commercial traceability.
+
+        Commercial action:
+        - Records active lifecycle transitions and optional sub-status for
+            new services.
+
+        Response type:
+        - JSON with created history object.
+        """
         client = self.get_object()
         
         status_val = request.data.get('status')
@@ -104,13 +144,36 @@ class ClientViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ContactViewSet(viewsets.ModelViewSet):
+    """CRUD API for client contacts used by the sales team.
+
+    Commercial action:
+    - Maintain contact people per client account.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
 
 class ImportClientsView(APIView):
+    """Import clients, contacts, and services from a CSV file.
+
+    Commercial action:
+    - Accelerates onboarding of leads and active customer portfolio from
+      spreadsheet exports.
+
+    Permissions:
+    - Uses the global authenticated API permission policy.
+
+    Response type:
+    - JSON summary with counts and error details.
+    """
+
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
+        """Process uploaded CSV and create/update CRM entities."""
         if 'file' not in request.FILES:
             return Response({"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -174,10 +237,46 @@ class ImportClientsView(APIView):
 
             def clean_decimal(value):
                 if not value: return Decimal('0.00')
-                # Remove dollar signs and commas
-                cleaned = re.sub(r'[^\d.]', '', str(value))
+                # Remove currency symbols, spaces and any non-numeric character except . and ,
+                cleaned = re.sub(r'[^\d.,]', '', str(value)).strip()
                 if cleaned == '': return Decimal('0.00')
                 try:
+                    # Detect Latin American format: comma is decimal separator, dot is thousands separator
+                    # Cases:
+                    #   "1.500,75"  -> dot before comma -> LA format -> "1500.75"
+                    #   "1,500.75"  -> comma before dot -> US format -> "1500.75"
+                    #   "1500,75"   -> only comma       -> LA format -> "1500.75"
+                    #   "1500.75"   -> only dot         -> US format -> "1500.75"
+                    #   "1.500"     -> only dot, no decimals -> thousands sep -> "1500"
+                    #   "1,500"     -> only comma, no decimals -> thousands sep -> "1500"
+                    has_dot   = '.' in cleaned
+                    has_comma = ',' in cleaned
+
+                    if has_dot and has_comma:
+                        last_dot   = cleaned.rfind('.')
+                        last_comma = cleaned.rfind(',')
+                        if last_comma > last_dot:
+                            # LA format: 1.500,75 -> remove dots, replace last comma with dot
+                            cleaned = cleaned.replace('.', '').replace(',', '.')
+                        else:
+                            # US format: 1,500.75 -> remove commas
+                            cleaned = cleaned.replace(',', '')
+                    elif has_comma and not has_dot:
+                        # Only comma present - treat as decimal separator (LA format)
+                        # Unless it appears multiple times (thousands separator like "1,500,000")
+                        if cleaned.count(',') == 1:
+                            cleaned = cleaned.replace(',', '.')
+                        else:
+                            cleaned = cleaned.replace(',', '')
+                    elif has_dot and not has_comma:
+                        # Only dot present - check if it's thousands separator
+                        # e.g. "1.500" has exactly 3 digits after dot -> thousands sep
+                        dot_pos = cleaned.rfind('.')
+                        digits_after = len(cleaned) - dot_pos - 1
+                        if cleaned.count('.') > 1 or digits_after == 3:
+                            cleaned = cleaned.replace('.', '')
+                        # else: leave as-is (normal decimal like "750.50")
+
                     return Decimal(cleaned)
                 except InvalidOperation:
                     return Decimal('0.00')
