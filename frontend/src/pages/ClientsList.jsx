@@ -1280,9 +1280,17 @@ export default function ClientsList() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
                     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
 
-                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
-                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-slate-900">Migrar Base de Datos Actual (CSV)</h3>
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up">
+                        <div className="px-6 py-5 border-b border-slate-200 bg-white flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center border border-blue-100">
+                                    <FileText className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-900">Migrar Base de Datos Actual (CSV)</h3>
+                                    <p className="text-sm text-slate-500">Sube un archivo de Excel (.xlsx) o CSV y revisa la carga antes de confirmar</p>
+                                </div>
+                            </div>
                             <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                                 <span className="sr-only">Cerrar</span>
                                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -1293,35 +1301,105 @@ export default function ClientsList() {
 
                         <form onSubmit={handleImportSubmit} className="p-6">
                             <div className="mb-6">
-                                <p className="text-sm text-slate-600 mb-4">
-                                    Asegúrese de exportar su archivo de Excel (`.xlsx`) a formato <strong>Valores separados por comas (.csv)</strong>.
-                                    El archivo debe contener las cabeceras exactas (REGION, CIUDAD, CLIENTE, SEGMENTO, CLASIFICACION DEL CLIENTE, UBICACION DEL SERVICIO, ESTADO...).
-                                </p>
-                                <label className="block text-sm font-medium leading-6 text-slate-900">Seleccionar Archivo .CSV</label>
-                                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-slate-300 px-6 py-10 hover:border-primary-500 transition-colors bg-slate-50">
-                                    <div className="text-center">
-                                        <Upload className="mx-auto h-12 w-12 text-slate-300" aria-hidden="true" />
-                                        <div className="mt-4 flex text-sm leading-6 text-slate-600 justify-center">
-                                            <label htmlFor="file-upload" className="relative cursor-pointer rounded-md bg-white font-semibold text-primary-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-primary-600 hover:text-primary-500">
-                                                <span>Subir un archivo</span>
-                                                <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv" onChange={(e) => setImportFile(e.target.files[0])} />
-                                            </label>
+                                <div className="relative group">
+                                    <div className="flex justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-10 group-hover:border-blue-400 transition-all bg-slate-50/50 group-hover:bg-blue-50/30">
+                                        <div className="text-center">
+                                            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                                                <Upload className="h-6 w-6 text-blue-500" />
+                                            </div>
+                                            <div className="flex text-sm leading-6 text-slate-600 justify-center">
+                                                <label htmlFor="file-upload" className="relative cursor-pointer font-bold text-blue-600 focus-within:outline-none hover:text-blue-700">
+                                                    <span>Arrastra tu archivo aquí</span>
+                                                    <span className="font-normal text-slate-500 ml-1">o haz clic para seleccionar</span>
+                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv" onChange={(e) => setImportFile(e.target.files[0])} />
+                                                </label>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mt-2">
+                                                Formatos aceptados: .xlsx · .xls · .csv
+                                            </p>
+                                            {importFile && (
+                                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-sm font-medium animate-pulse">
+                                                    <FileText className="w-4 h-4" />
+                                                    {importFile.name}
+                                                </div>
+                                            )}
                                         </div>
-                                        <p className="text-xs leading-5 text-slate-500 mt-2">
-                                            {importFile ? importFile.name : 'Solo archivos .csv'}
-                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-end gap-x-4">
-                                <button type="button" onClick={() => setIsImportModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
-                                    Cancelar
+                            <div className="bg-slate-50/80 rounded-xl p-5 border border-slate-100 mb-6">
+                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Columnas del archivo:</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CLIENTE *</span>
+                                        <span className="text-[11px] text-slate-500">Nombre o razón social (requerido)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CEDULA/RUC *</span>
+                                        <span className="text-[11px] text-slate-500">Identificación fiscal</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">ESTADO *</span>
+                                        <span className="text-[11px] text-slate-500">Activo, Inactivo, Prospecto</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">GERENTE DE CUENTA</span>
+                                        <span className="text-[11px] text-slate-500">Nombre del responsable</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">REGION / CIUDAD</span>
+                                        <span className="text-[11px] text-slate-500">Ubicación geográfica</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SEGMENTO</span>
+                                        <span className="text-[11px] text-slate-500">Estratificación comercial</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">MRC / NRC</span>
+                                        <span className="text-[11px] text-slate-500">Valores financieros</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SERVICIO</span>
+                                        <span className="text-[11px] text-slate-500">Nombre del producto</span>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-4 italic">
+                                    Las columnas <strong>EMAIL, TELEFONO</strong> y <strong>DIRECCION</strong> también serán importadas si existen.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {/* Lógica para descargar plantilla */}}
+                                    className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span>Descargar plantilla</span>
                                 </button>
-                                <button type="submit" className="btn-primary flex items-center gap-2" disabled={!importFile}>
-                                    <Upload className="w-4 h-4" />
-                                    Iniciar Migración
-                                </button>
+
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsImportModalOpen(false)}
+                                        className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                                            importFile
+                                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700'
+                                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        }`}
+                                        disabled={!importFile}
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                        <span>Iniciar Migración</span>
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
