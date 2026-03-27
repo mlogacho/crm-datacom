@@ -1,3 +1,10 @@
+"""Service management API views.
+
+This module handles CRM commercial operations for service catalog,
+client service opportunities, and work orders tied to sales-to-installation
+handoff.
+"""
+
 from rest_framework import viewsets, status
 from .models import ServiceCatalog, ClientService, WorkOrder
 from clients.models import ClientStatusHistory
@@ -7,14 +14,37 @@ from rest_framework.response import Response
 from django.db.models import Max
 
 class ServiceCatalogViewSet(viewsets.ModelViewSet):
+    """CRUD API for commercial service catalog definitions.
+
+    Commercial action:
+    - Manage the list of sellable services and baseline pricing references.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = ServiceCatalog.objects.all()
     serializer_class = ServiceCatalogSerializer
 
 class ClientServiceViewSet(viewsets.ModelViewSet):
+    """CRUD API for client opportunities and contracted services.
+
+    Commercial action:
+    - Track lifecycle status of each sold service instance.
+
+    Permissions:
+    - Global authenticated API permission policy.
+    - Sales roles are scoped to clients assigned to the account manager.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = ClientService.objects.all().order_by('-created_at')
     serializer_class = ClientServiceSerializer
 
     def get_queryset(self):
+        """Return filtered service opportunities for current user context."""
         user = self.request.user
         queryset = ClientService.objects.all().order_by('-created_at')
         
@@ -37,10 +67,21 @@ class ClientServiceViewSet(viewsets.ModelViewSet):
         return queryset
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
+    """CRUD API for operational work orders associated with sales.
+
+    Commercial action:
+    - Create or update installation work orders and log status evidence in
+        client history.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = WorkOrder.objects.all().order_by('-created_at')
     serializer_class = WorkOrderSerializer
 
     def create(self, request, *args, **kwargs):
+        """Create a work order or update existing one for the same service."""
         client_service_id = request.data.get('client_service')
         instance = WorkOrder.objects.filter(client_service_id=client_service_id).first()
         if instance:
@@ -53,6 +94,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
+        """Persist work order and append BACKLOG trace into status history."""
         # Save the work order (create or update)
         work_order = serializer.save()
         
@@ -77,8 +119,10 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             custom_date=work_order.created_at
         )
 
+
     @action(detail=False, methods=['get'])
     def next_sequence(self, request):
+        """Return next sequence numbers for order and login generation."""
         from clients.models import ClientStatusHistory
         # Use history count as the base for the sequence to account for all 'generation' attempts
         # Since duplication is now fixed, each future attempt adds 1.

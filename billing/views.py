@@ -1,3 +1,9 @@
+"""Billing API views.
+
+This module provides endpoints to manage invoices, invoice items,
+monthly billing records, and bulk billing imports.
+"""
+
 import uuid
 from decimal import Decimal, InvalidOperation
 
@@ -12,19 +18,47 @@ from services.models import ServiceCatalog
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
+    """CRUD API for customer invoices.
+
+    Commercial action:
+    - Manage receivables and invoice lifecycle for clients.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = Invoice.objects.all().order_by('-created_at')
     serializer_class = InvoiceSerializer
 
 
 class InvoiceItemViewSet(viewsets.ModelViewSet):
+    """CRUD API for invoice line items.
+
+    Commercial action:
+    - Detail billable services and amounts per invoice.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = InvoiceItem.objects.all()
     serializer_class = InvoiceItemSerializer
 
 
 class BillingRecordViewSet(viewsets.ModelViewSet):
+    """CRUD API for monthly billing records by client and service.
+
+    Commercial action:
+    - Track recurring billing statements and periodized revenue.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     serializer_class = BillingRecordSerializer
 
     def get_queryset(self):
+        """Return filtered billing records by month, year, and client name."""
         qs = BillingRecord.objects.select_related('client', 'service_catalog').all()
         mes = self.request.query_params.get('mes')
         anio = self.request.query_params.get('anio')
@@ -40,11 +74,17 @@ class BillingRecordViewSet(viewsets.ModelViewSet):
 
 class BulkCreateBillingView(APIView):
     """
-    Receives a list of parsed billing rows from the frontend (SheetJS)
-    and creates BillingRecord instances in bulk.
+    Receive parsed billing rows from frontend and upsert monthly records.
+
+    Commercial action:
+    - Speed up monthly billing ingestion from external spreadsheets.
+
+    Response type:
+    - JSON summary with created, updated, and error counters.
     """
 
     def post(self, request):
+        """Validate and bulk upsert billing rows into BillingRecord."""
         records_data = request.data.get('records', [])
         if not records_data:
             return Response(

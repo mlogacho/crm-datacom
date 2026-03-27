@@ -70,7 +70,7 @@ ROOT_URLCONF = "crm_backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [os.path.join(BASE_DIR, 'frontend', 'dist')],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -144,6 +144,13 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
+# In local dev, include Vite's compiled assets so Django dev server can serve them.
+# In production, Nginx serves these files directly.
+if DEBUG:
+    STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, 'frontend', 'dist'),
+    ]
+
 # Media files (User uploaded files)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -169,3 +176,13 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 1000,
 }
+
+# Email (SMTP) Configuration - Datacom mail server
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.datacom.ec')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 465))
+EMAIL_USE_SSL = True
+EMAIL_USE_TLS = False
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'daia@datacom.ec')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'I2Mh)c*)+dGcLoWa')
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', 'daia@datacom.ec')

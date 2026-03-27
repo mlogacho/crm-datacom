@@ -1,3 +1,9 @@
+"""Authentication and user administration API views.
+
+This module provides role and user management endpoints plus custom
+token authentication with optional 2FA setup flow.
+"""
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.contrib.auth.models import User
@@ -11,17 +17,44 @@ import pyotp
 import qrcode
 import base64
 from io import BytesIO
+import secrets
+import string
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import make_password
 
 class RoleViewSet(viewsets.ModelViewSet):
+    """CRUD API for role definitions and allowed view permissions.
+
+    Commercial action:
+    - Configure role-based access to CRM modules for internal teams.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = Role.objects.all().order_by('name')
     serializer_class = RoleSerializer
 
 class UserViewSet(viewsets.ModelViewSet):
+    """CRUD API for CRM users and profile data.
+
+    Commercial action:
+    - Manage internal users who operate sales, support, and billing flows.
+
+    Permissions:
+    - Global authenticated API permission policy.
+    - Includes guard to avoid deleting primary superadmin.
+
+    Response type:
+    - JSON payloads through DRF serializers.
+    """
+
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
 
     # Override destroy to not delete the superadmin/admin user by accident
     def destroy(self, request, *args, **kwargs):
+        """Delete user unless it is the protected superadmin account."""
         instance = self.get_object()
         if instance.username == 'admin' or instance.is_superuser:
             return Response({"error": "No se puede eliminar al súper administrador principal."}, status=status.HTTP_403_FORBIDDEN)
@@ -30,6 +63,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _transform_profile_data(self, request):
+        """Normalize multipart keys from `profile.*` into nested profile data."""
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
         if hasattr(data, 'dict'):
             data = data.dict()
@@ -50,6 +84,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return data
 
     def create(self, request, *args, **kwargs):
+        """Create user with nested profile payload transformation."""
         data = self._transform_profile_data(request)
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -58,6 +93,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
+        """Partially update user and restrict sensitive fields by role."""
         partial = True # Always allow partial updates to handle multipart/form-data correctly
         instance = self.get_object()
         data = self._transform_profile_data(request)
@@ -77,6 +113,14 @@ class UserViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_user_permissions(request):
+    """Return role-based permissions and profile data for current user.
+
+    Commercial action:
+    - Supplies frontend authorization context to enable/disable CRM modules.
+
+    Response type:
+    - JSON payload.
+    """
     user = request.user
     
     full_name = f"{user.first_name} {user.last_name}".strip()
@@ -118,7 +162,17 @@ def get_user_permissions(request):
     return Response(payload)
 
 class CustomAuthToken(ObtainAuthToken):
+    """Authenticate user and enforce 2FA setup/verification workflow.
+
+    Commercial action:
+    - Controls secure login for internal CRM users.
+
+    Response type:
+    - JSON with auth token, or 2FA challenge/setup payload.
+    """
+
     def post(self, request, *args, **kwargs):
+        """Issue token only after validating credentials and TOTP state."""
         serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
@@ -174,7 +228,13 @@ class CustomAuthToken(ObtainAuthToken):
 @permission_classes([AllowAny])
 def verify_2fa_setup(request):
     """
-    Called when a user is setting up 2FA for the first time during login.
+    Verify first-time 2FA setup code and finalize authenticated login.
+
+    Commercial action:
+    - Completes secure access provisioning for CRM users.
+
+    Response type:
+    - JSON token response or validation error.
     """
     user_id = request.data.get('user_id')
     temp_secret = request.data.get('temp_secret')
@@ -212,7 +272,13 @@ def verify_2fa_setup(request):
 @permission_classes([IsAuthenticated])
 def get_account_managers(request):
     """
-    Returns users with roles: Gerente de Cuenta, Gerente General, Presidente Ejecutivo
+    Return users eligible to be assigned as account managers.
+
+    Commercial action:
+    - Supports client assignment workflows in sales operations.
+
+    Response type:
+    - JSON list of users.
     """
     roles = ["Gerente de Cuenta", "Gerente General", "Presidente Ejecutivo"]
     users = User.objects.filter(profile__role__name__in=roles).distinct()
@@ -225,3 +291,167 @@ def get_account_managers(request):
             "full_name": full_name or user.username
         })
     return Response(data)
+
+
+def _generate_secure_password(length=8):
+    """
+    Generate a cryptographically secure password following best practices:
+    - At least 1 uppercase letter
+    - At least 1 lowercase letter
+    - At least 1 digit
+    - At least 1 special character
+    - Total length of 'length' characters (minimum 8)
+    """
+    alphabet_upper = string.ascii_uppercase
+    alphabet_lower = string.ascii_lowercase
+    digits = string.digits
+    # Avoid ambiguous chars like 0, O, l, 1, I
+    specials = "!@#$%^&*()-_=+[]{}|;:,.<>?"
+    
+    # Guarantee at least one of each required type
+    required = [
+        secrets.choice(alphabet_upper),
+        secrets.choice(alphabet_lower),
+        secrets.choice(digits),
+        secrets.choice(specials),
+    ]
+    
+    # Fill the rest randomly from full alphabet
+    full_alphabet = alphabet_upper + alphabet_lower + digits + specials
+    remaining = [secrets.choice(full_alphabet) for _ in range(length - len(required))]
+    
+    password_list = required + remaining
+    # Shuffle to avoid predictable patterns
+    secrets.SystemRandom().shuffle(password_list)
+    return ''.join(password_list)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_and_send_password(request):
+    """
+    Generate a secure 8-character password for a user and send it via email.
+
+    Commercial action:
+    - Allows admin to provision new credentials and notify the user immediately.
+
+    Request body:
+    - user_id: int - ID of the user to generate the password for
+
+    Response type:
+    - JSON with success status and the generated password.
+    """
+    user_id = request.data.get('user_id')
+    if not user_id:
+        return Response({"error": "Se requiere el user_id."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+    
+    if not user.email:
+        return Response({"error": "El usuario no tiene correo electrónico configurado."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate secure password
+    new_password = _generate_secure_password(8)
+    
+    # Save hashed password to user
+    user.password = make_password(new_password)
+    user.save()
+    
+    # Invalidate existing tokens so user must log in again with new password
+    Token.objects.filter(user=user).delete()
+    
+    full_name = f"{user.first_name} {user.last_name}".strip() or user.username
+    
+    # Build HTML email
+    html_message = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 0; }}
+        .container {{ max-width: 540px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
+        .header {{ background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); padding: 32px 40px; }}
+        .header h1 {{ color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; }}
+        .header p {{ color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 13px; }}
+        .body {{ padding: 32px 40px; }}
+        .greeting {{ color: #1a1a2e; font-size: 16px; margin-bottom: 20px; }}
+        .credentials-box {{ background: #f0f4ff; border: 1px solid #c7d7fc; border-radius: 10px; padding: 24px; margin: 24px 0; }}
+        .cred-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #6b7c9d; font-weight: 600; margin-bottom: 4px; }}
+        .cred-value {{ font-size: 20px; font-weight: 700; color: #1a1a2e; font-family: 'Courier New', monospace; letter-spacing: 1px; }}
+        .cred-row {{ margin-bottom: 16px; }}
+        .cred-row:last-child {{ margin-bottom: 0; }}
+        .warning {{ background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px; margin: 24px 0; }}
+        .warning p {{ margin: 0; font-size: 13px; color: #78350f; }}
+        .footer {{ background: #f8faff; padding: 24px 40px; border-top: 1px solid #e8edf5; text-align: center; }}
+        .footer p {{ margin: 0; font-size: 12px; color: #9ca3af; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>&#128274; Nuevas Credenciales de Acceso</h1>
+            <p>CRM Datacom &mdash; Sistema de Gesti&oacute;n</p>
+        </div>
+        <div class="body">
+            <p class="greeting">Hola, <strong>{full_name}</strong></p>
+            <p style="color:#4b5563; font-size:14px;">Se han generado nuevas credenciales de acceso para tu cuenta en el CRM Datacom. Por favor, utiliza los siguientes datos para ingresar al sistema:</p>
+            <div class="credentials-box">
+                <div class="cred-row">
+                    <div class="cred-label">&#128100; Usuario</div>
+                    <div class="cred-value">{user.username}</div>
+                </div>
+                <div class="cred-row">
+                    <div class="cred-label">&#128273; Contrase&ntilde;a Temporal</div>
+                    <div class="cred-value">{new_password}</div>
+                </div>
+            </div>
+            <div class="warning">
+                <p>&#9888;&#65039; <strong>Importante:</strong> Por seguridad, deber&aacute;s cambiar esta contrase&ntilde;a en tu pr&oacute;ximo inicio de sesi&oacute;n. Esta contrase&ntilde;a es de uso &uacute;nico y temporal.</p>
+            </div>
+            <p style="color:#4b5563; font-size:13px;">Si no solicitaste este cambio, contacta inmediatamente con el administrador del sistema.</p>
+        </div>
+        <div class="footer">
+            <p>Este correo fue generado autom&aacute;ticamente por el CRM Datacom &bull; No responder a este mensaje</p>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    plain_message = f"""Nuevas Credenciales de Acceso - CRM Datacom
+
+Hola {full_name},
+
+Se han generado nuevas credenciales de acceso para tu cuenta:
+
+Usuario: {user.username}
+Contrasena Temporal: {new_password}
+
+IMPORTANTE: Debes cambiar esta contrasena en tu proximo inicio de sesion.
+
+Si no solicitaste este cambio, contacta al administrador del sistema.
+
+CRM Datacom"""
+    
+    try:
+        send_mail(
+            subject="[CRM Datacom] Nuevas Credenciales de Acceso",
+            message=plain_message,
+            from_email=None,  # Uses DEFAULT_FROM_EMAIL from settings
+            recipient_list=[user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+    except Exception as e:
+        return Response({
+            "error": f"Contrasena generada pero no se pudo enviar el correo: {str(e)}",
+            "generated_password": new_password
+        }, status=status.HTTP_207_MULTI_STATUS)
+    
+    return Response({
+        "success": True,
+        "message": f"Contraseña generada y enviada a {user.email}",
+        "generated_password": new_password
+    }, status=status.HTTP_200_OK)

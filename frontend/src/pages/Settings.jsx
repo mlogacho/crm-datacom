@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Search, Shield, Users, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Shield, Users, Pencil, Trash2, Eye, EyeOff, RefreshCw, Mail, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const VIEWS_OPTIONS = [
@@ -13,6 +13,44 @@ const VIEWS_OPTIONS = [
     { id: 'settings', label: 'Configuración (Super Admin / Roles)' }
 ];
 
+/**
+ * Generate a cryptographically secure password of given length on the frontend.
+ * Follows best practices: uppercase, lowercase, digit, special char guaranteed.
+ */
+function generateSecurePassword(length = 8) {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // removed ambiguous I, O
+    const lower = 'abcdefghjkmnpqrstuvwxyz';      // removed ambiguous l, o
+    const digits = '23456789';                    // removed ambiguous 0, 1
+    const specials = '!@#$%^&*()-_=+[]{}|;:,.';
+    const all = upper + lower + digits + specials;
+
+    const array = new Uint8Array(length + 10);
+    crypto.getRandomValues(array);
+
+    const required = [
+        upper[array[0] % upper.length],
+        lower[array[1] % lower.length],
+        digits[array[2] % digits.length],
+        specials[array[3] % specials.length],
+    ];
+
+    const rest = [];
+    for (let i = 4; i < length + 4; i++) {
+        rest.push(all[array[i] % all.length]);
+    }
+
+    const combined = [...required, ...rest];
+    // Fisher-Yates shuffle using random values
+    const shuffleArr = new Uint8Array(combined.length);
+    crypto.getRandomValues(shuffleArr);
+    for (let i = combined.length - 1; i > 0; i--) {
+        const j = shuffleArr[i] % (i + 1);
+        [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+
+    return combined.join('').substring(0, length);
+}
+
 export default function Settings() {
     const [activeTab, setActiveTab] = useState('roles'); // 'roles' or 'users'
     const [roles, setRoles] = useState([]);
@@ -22,10 +60,17 @@ export default function Settings() {
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
+    // Password visibility
+    const [showPassword, setShowPassword] = useState(false);
+
+    // Send password state
+    const [sendingPassword, setSendingPassword] = useState(false);
+    const [passwordSentResult, setPasswordSentResult] = useState(null); // { success, message, password }
+
     // Forms
     const [roleForm, setRoleForm] = useState({ id: null, name: '', description: '', allowed_views: [] });
     const [userForm, setUserForm] = useState({
-        id: null, username: '', first_name: '', last_name: '', password: '',
+        id: null, username: '', first_name: '', last_name: '', email: '', password: '',
         profile: { cedula: '', cargo: '', role: '', birthdate: '', civil_status: '', photo: null }
     });
 
@@ -113,9 +158,11 @@ export default function Settings() {
     // --- User Actions ---
     const openNewUser = () => {
         setUserForm({
-            id: null, username: '', first_name: '', last_name: '', password: '',
+            id: null, username: '', first_name: '', last_name: '', email: '', password: '',
             profile: { cedula: '', cargo: '', role: '', birthdate: '', civil_status: '', photo: null }
         });
+        setShowPassword(false);
+        setPasswordSentResult(null);
         setIsUserModalOpen(true);
     };
 
@@ -125,6 +172,7 @@ export default function Settings() {
             username: user.username,
             first_name: user.first_name,
             last_name: user.last_name,
+            email: user.email || '',
             password: '', // blank so we don't overwrite if not typing anything
             profile: {
                 cedula: user.profile?.cedula || '',
@@ -135,7 +183,55 @@ export default function Settings() {
                 photo: null
             }
         });
+        setShowPassword(false);
+        setPasswordSentResult(null);
         setIsUserModalOpen(true);
+    };
+
+    const handleGeneratePassword = () => {
+        const pwd = generateSecurePassword(8);
+        setUserForm(prev => ({ ...prev, password: pwd }));
+        setShowPassword(true);
+    };
+
+    const handleSendGeneratedPassword = async () => {
+        if (!userForm.id) {
+            alert("Primero guarda el usuario antes de enviar la contraseña por correo.");
+            return;
+        }
+        if (!userForm.email) {
+            alert("El usuario no tiene correo electrónico configurado.");
+            return;
+        }
+
+        setSendingPassword(true);
+        setPasswordSentResult(null);
+
+        try {
+            const res = await axios.post('/api/core/generate-password/', { user_id: userForm.id });
+            const generatedPwd = res.data.generated_password;
+            setUserForm(prev => ({ ...prev, password: generatedPwd }));
+            setShowPassword(true);
+            setPasswordSentResult({
+                success: true,
+                message: res.data.message,
+                password: generatedPwd
+            });
+        } catch (error) {
+            const errMsg = error.response?.data?.error || "Error al generar y enviar la contraseña.";
+            const genPwd = error.response?.data?.generated_password;
+            setPasswordSentResult({
+                success: false,
+                message: errMsg,
+                password: genPwd
+            });
+            if (genPwd) {
+                setUserForm(prev => ({ ...prev, password: genPwd }));
+                setShowPassword(true);
+            }
+        } finally {
+            setSendingPassword(false);
+        }
     };
 
     const handleUserSubmit = async (e) => {
@@ -156,6 +252,7 @@ export default function Settings() {
         formData.append('username', submitData.username);
         formData.append('first_name', submitData.first_name);
         formData.append('last_name', submitData.last_name);
+        formData.append('email', submitData.email || '');
         if (submitData.password) formData.append('password', submitData.password);
 
         formData.append('profile.cedula', submitData.profile.cedula);
@@ -314,6 +411,7 @@ export default function Settings() {
                                                     <div>
                                                         {user.first_name || user.last_name ? `${user.first_name} ${user.last_name}` : user.username}
                                                         <div className="text-xs text-slate-400 font-normal">@{user.username}</div>
+                                                        {user.email && <div className="text-xs text-slate-400 font-normal">{user.email}</div>}
                                                     </div>
                                                 </div>
                                             </td>
@@ -403,18 +501,94 @@ export default function Settings() {
                         </div>
                         <form onSubmit={handleUserSubmit} className="p-6">
                             <div className="grid grid-cols-2 gap-4">
+                                {/* LEFT COLUMN: Credentials */}
                                 <div className="space-y-4">
                                     <h4 className="font-semibold text-sm text-slate-800 border-b pb-1">Credenciales de Acceso</h4>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">Usuario *</label>
                                         <input type="text" required value={userForm.username} disabled={!isSuperAdmin || userForm.username === 'admin'} onChange={e => setUserForm({ ...userForm, username: e.target.value })} className="input-field w-full text-sm" placeholder="Ej. jperez" />
                                     </div>
+
+                                    {/* Email field */}
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                                            Correo Electrónico {!userForm.id && '*'}
+                                        </label>
+                                        <input
+                                            type="email"
+                                            required={!userForm.id}
+                                            value={userForm.email}
+                                            onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                                            className="input-field w-full text-sm"
+                                            placeholder="usuario@empresa.com"
+                                        />
+                                    </div>
+
+                                    {/* Password field with show/hide and generate buttons */}
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">
                                             Contraseña {userForm.id && <span className="text-slate-400 font-normal">(Dejar en blanco para no cambiar)</span>} {!userForm.id && '*'}
                                         </label>
-                                        <input type="password" required={!userForm.id} value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className="input-field w-full text-sm" />
+                                        <div className="relative">
+                                            <input
+                                                type={showPassword ? "text" : "password"}
+                                                required={!userForm.id}
+                                                value={userForm.password}
+                                                onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                                                className="input-field w-full text-sm pr-10 font-mono tracking-wider"
+                                                placeholder="••••••••"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(v => !v)}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
+                                                title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                            >
+                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+
+                                        {/* Password action buttons */}
+                                        <div className="flex gap-2 mt-2">
+                                            {/* Generate password (client-side, just fills the field) */}
+                                            <button
+                                                type="button"
+                                                onClick={handleGeneratePassword}
+                                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg font-medium transition-colors"
+                                                title="Generar contraseña segura"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" /> Generar
+                                            </button>
+
+                                            {/* Send generated password via email (server-side, only for existing users with email) */}
+                                            {userForm.id && userForm.email && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSendGeneratedPassword}
+                                                    disabled={sendingPassword}
+                                                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg font-medium transition-colors disabled:opacity-50"
+                                                    title="Generar nueva contraseña y enviar por correo"
+                                                >
+                                                    {sendingPassword ? (
+                                                        <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Enviando...</>
+                                                    ) : (
+                                                        <><Mail className="w-3.5 h-3.5" /> Generar y Enviar</>
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Send result notification */}
+                                        {passwordSentResult && (
+                                            <div className={`mt-2 p-2 rounded-lg flex items-start gap-2 text-xs ${passwordSentResult.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                                                {passwordSentResult.success
+                                                    ? <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                    : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                                                <span>{passwordSentResult.message}</span>
+                                            </div>
+                                        )}
                                     </div>
+
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">Rol Asignado *</label>
                                         <select
@@ -431,6 +605,8 @@ export default function Settings() {
                                         </select>
                                     </div>
                                 </div>
+
+                                {/* RIGHT COLUMN: Personal data */}
                                 <div className="space-y-4">
                                     <h4 className="font-semibold text-sm text-slate-800 border-b pb-1">Datos de la Persona</h4>
                                     <div>

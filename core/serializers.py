@@ -1,14 +1,20 @@
+"""Serializers for identity, role, and profile management."""
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Role, UserProfile
 from django.contrib.auth.hashers import make_password
 
 class RoleSerializer(serializers.ModelSerializer):
+    """Serialize role configuration and allowed views."""
+
     class Meta:
         model = Role
         fields = '__all__'
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    """Serialize CRM user profile details and role metadata."""
+
     role_name = serializers.CharField(source='role.name', read_only=True)
 
     class Meta:
@@ -23,6 +29,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         }
 
 class UserSerializer(serializers.ModelSerializer):
+    """Serialize users with nested CRM profile and password handling."""
+
     profile = UserProfileSerializer(required=False)
     password = serializers.CharField(write_only=True, required=False)
 
@@ -32,6 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['is_active']
 
     def create(self, validated_data):
+        """Create Django user and associated CRM profile record."""
         profile_data = validated_data.pop('profile', {})
         if 'password' in validated_data:
             validated_data['password'] = make_password(validated_data['password'])
@@ -43,6 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
+        """Update user attributes and upsert nested profile data."""
         profile_data = validated_data.pop('profile', None)
         
         if 'password' in validated_data and validated_data['password']:
