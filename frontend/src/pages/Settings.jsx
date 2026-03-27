@@ -255,11 +255,17 @@ export default function Settings() {
         formData.append('email', submitData.email || '');
         if (submitData.password) formData.append('password', submitData.password);
 
-        formData.append('profile.cedula', submitData.profile.cedula);
-        formData.append('profile.cargo', submitData.profile.cargo);
-        formData.append('profile.birthdate', submitData.profile.birthdate);
-        formData.append('profile.civil_status', submitData.profile.civil_status);
+        formData.append('profile.cedula', submitData.profile.cedula || '');
+        formData.append('profile.cargo', submitData.profile.cargo || '');
+        
+        if (submitData.profile.birthdate) {
+            formData.append('profile.birthdate', submitData.profile.birthdate);
+        }
+        if (submitData.profile.civil_status) {
+            formData.append('profile.civil_status', submitData.profile.civil_status);
+        }
         if (submitData.profile.role) formData.append('profile.role', submitData.profile.role);
+        
         if (submitData.profile.photo instanceof File) {
             formData.append('profile.photo', submitData.profile.photo);
         }
@@ -273,7 +279,10 @@ export default function Settings() {
             setIsUserModalOpen(false);
             fetchUsers();
         } catch (error) {
-            const msg = error.response?.data?.username ? "Este nombre de usuario ya existe." : "Error al guardar el usuario.";
+            console.error(error.response?.data);
+            const msg = error.response?.data?.username 
+                ? "Este nombre de usuario ya existe." 
+                : "Error al guardar el usuario: " + JSON.stringify(error.response?.data || error.message);
             alert(msg);
         }
     };
