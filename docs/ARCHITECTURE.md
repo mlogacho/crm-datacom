@@ -413,6 +413,9 @@ ETAPA 4 - FACTURACIÓN Y SOPORTE (Cuentas + Support)
 
 ## 4. Modelo de Datos Resumido (Entidades y Relaciones)
 
+> **Diagrama completo:** Para el diagrama ERD completo en notación Mermaid (incluye todos los atributos,
+> cardinalidades y notas de implementación), consulta [`docs/ERD.md`](ERD.md).
+
 ### Diagrama de Entidades (ER)
 
 ```
