@@ -2,6 +2,15 @@
 
 Este documento detalla el mecanismo de autenticación centralizada implementado para el **CRM DataCom**, el cual delega la gestión de credenciales al portal **ERP Datacom (WebISO)**.
 
+## Aplicaciones integradas con SSO
+
+| Aplicación | URL | Tecnología |
+|---|---|---|
+| CRM DataCom | `http://10.11.121.58` | React + Django Authtoken |
+| Acta de Reuniones | `http://10.11.121.58:8030` | React + Node.js/Express JWT |
+
+Todas las apps reciben el token como `?sso_token=<django_token>` desde el ERP y lo intercambian por su propio token de sesión.
+
 ## 1. Flujo de Autenticación
 
 El CRM está configurado para no permitir el inicio de sesión local directo (portal `/login` inhabilitado). El flujo estándar es:
@@ -50,3 +59,15 @@ if (!activeToken) {
 
 - **Pantalla Blanca**: Si el CRM se queda en blanco, verifique que el portal ERP (8081) sea accesible desde su red.
 - **Bucle de redirección**: Asegúrese de que el ERP esté enviando correctamente el parámetro `?sso_token=` al redirigir de vuelta.
+
+## 5. Integración con Acta de Reuniones
+
+El **Sistema de Acta de Reuniones** (puerto 8030) implementa el mismo patrón SSO:
+
+- El ERP abre `http://10.11.121.58:8030?sso_token=<token>` al hacer clic en la tarjeta "Acta de Reuniones".
+- Un IIFE en `AuthContext.tsx` captura el token antes del primer render.
+- El frontend intercambia el token Django contra el endpoint `POST /api/auth/sso` del backend Node.js.
+- El backend valida el token contra `GET /api/core/user-permissions/` del CRM y emite un JWT propio (8 h de validez).
+- La sesión se almacena en `sessionStorage` (consistente con CRM y WebISO).
+- El logout redirige al ERP (`http://10.11.121.58:8081`).
+- En caso de 401, el interceptor Axios redirige al ERP en lugar de a `/login`.
