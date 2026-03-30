@@ -22,7 +22,7 @@ export default function Dashboard() {
     const [chartData, setChartData] = useState([]);
     const [allClients, setAllClients] = useState([]);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const [selectedFields, setSelectedFields] = useState(['name', 'email', 'region', 'segment', 'account_manager']);
+    const [selectedFields, setSelectedFields] = useState(['name', 'email', 'region', 'segment', 'account_manager_name']);
 
     const availableFields = [
         { id: 'name', label: 'Nombre Cliente' },
@@ -33,7 +33,7 @@ export default function Dashboard() {
         { id: 'city', label: 'Ciudad' },
         { id: 'segment', label: 'Segmento' },
         { id: 'service_location', label: 'Ubicación Servicio' },
-        { id: 'account_manager', label: 'Gerente de Cuenta' },
+        { id: 'account_manager_name', label: 'Gerente de Cuenta' },
         { id: 'classification', label: 'Clasificación' },
     ];
 
@@ -51,7 +51,11 @@ export default function Dashboard() {
 
                 // Filter specifically for Managers or Sales if not superuser
                 if (!isSuper && (role === 'Gerente de Cuenta' || role === 'Ventas')) {
-                    clientsList = clientsList.filter(c => c.account_manager?.toLowerCase().includes(loggedName.toLowerCase()));
+                    const loggedNameLower = loggedName.toLowerCase();
+                    clientsList = clientsList.filter(c => {
+                        const managerName = (c.account_manager_name || '').toLowerCase();
+                        return managerName.includes(loggedNameLower);
+                    });
                 }
 
                 const clientsCount = clientsList.length;
@@ -92,7 +96,7 @@ export default function Dashboard() {
                 const revenueByManager = {};
                 activeServices.forEach(service => {
                     const client = clientsList.find(c => c.id === service.client);
-                    const managerName = (client && client.account_manager) ? client.account_manager : 'Sin Asignar';
+                    const managerName = (client && client.account_manager_name) ? client.account_manager_name : 'Sin Asignar';
                     const price = parseFloat(service.agreed_price || 0);
 
                     if (!revenueByManager[managerName]) {
@@ -191,6 +195,7 @@ export default function Dashboard() {
             return selectedFields.map(field => {
                 let val = client[field];
                 if (field === 'classification') val = val === 'ACTIVE' ? 'Cliente Activo' : 'Prospecto';
+                if (field === 'account_manager_name') val = client.account_manager_name || 'Sin Asignar';
                 return val || 'N/A';
             });
         });
@@ -215,6 +220,7 @@ export default function Dashboard() {
                 const label = found ? found.label : field;
                 let val = client[field];
                 if (field === 'classification') val = val === 'ACTIVE' ? 'Cliente Activo' : 'Prospecto';
+                if (field === 'account_manager_name') val = client.account_manager_name || 'Sin Asignar';
                 rowData[label] = val || 'N/A';
             });
             return rowData;
