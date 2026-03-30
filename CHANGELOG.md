@@ -17,6 +17,10 @@
 - Plantilla `.env.example` alineada a variables detectadas en settings.
 - Dependencias actualizadas en `requirements.txt` para 2FA y QR.
 - Script de recuperacion y automatizacion de tareas ajustados para entorno local.
+- Migracion de `clients.Client.account_manager` de campo de texto a relacion `ForeignKey` con `auth.User`.
+- Nueva migracion estructural `clients.0009_client_account_manager_fk` para introducir el FK sin perder datos existentes.
+- Nueva migracion de datos `clients.0010_migrate_account_manager_data` para mapear valores legacy a usuarios de forma tolerante.
+- Nuevo campo de respuesta API `account_manager_name` en serializador de clientes para mostrar nombre legible del ejecutivo.
 
 ### Fixed
 - **Validaciones de Frontend/Backend**:
@@ -24,6 +28,21 @@
   - Resolución de un `IndentationError` crítico presente en `services/views.py` (`WorkOrderViewSet`).
 - **Despliegues (Deployment)**:
   - Optimización del archivo `crm_backend/urls.py` de Django para que las configuraciones de SPA Catch-All y activos estáticos recompilados desde local (`/assets/`) sólo se sirvan bajo el flag de `DEBUG=True`, lo que permite una integración limpia a producción (NGINX + Gunicorn).
+- **Clientes y Servicios (Filtro por ejecutivo):**
+  - Eliminado filtrado legacy por texto (`account_manager__icontains`) y reemplazado por filtrado exacto por FK a `User`.
+  - Ajustada visibilidad para rol `Asistente de Gerencia` con acceso sin restriccion por ejecutivo asignado.
+- **Importacion CSV de clientes:**
+  - Adaptada la importacion para resolver `GERENTE DE CUENTA` a `User` cuando existe coincidencia unica.
+  - Cuando no hay coincidencia unica, el proceso no falla y mantiene asignacion nula para proteger continuidad operativa.
+
+### Changed
+- **Frontend de Clientes (`frontend/src/pages/ClientsList.jsx`)**:
+  - El selector de gerente ahora envia `account_manager` como `User.id`.
+  - La tabla y filtros muestran el nombre legible mediante `account_manager_name`.
+- **Despliegue controlado en servidor de produccion (`/var/www/crm-datacom`)**:
+  - Aplicado con respaldo previo de base de datos y archivos impactados.
+  - Compilado frontend con `npm run build`.
+  - Reiniciado unicamente `gunicorn-crm.service` para evitar impacto en otras aplicaciones.
 
 ## [0.1.0] — 2026-03-19
 ### Added
