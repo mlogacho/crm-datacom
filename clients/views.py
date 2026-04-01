@@ -10,6 +10,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.contrib.auth.models import User
+from django.db.models import F, Value, CharField
+from django.db.models.functions import Concat
 from .models import Client, Contact, ClientStatusHistory
 from services.models import ServiceCatalog, ClientService
 from .serializers import ClientSerializer, ContactSerializer, ClientStatusHistorySerializer
@@ -18,6 +21,28 @@ import io
 import uuid
 from datetime import date
 import re
+
+
+def resolve_account_manager_user(manager_name):
+    """Resolve an account manager name to a unique User match using full-name icontains."""
+    normalized_name = " ".join((manager_name or "").split())
+    if not normalized_name:
+        return None
+
+    try:
+        candidates = list(
+            User.objects.annotate(
+                full_name=Concat(
+                    F('first_name'),
+                    Value(' '),
+                    F('last_name'),
+                    output_field=CharField(),
+                )
+            ).filter(full_name__icontains=normalized_name)[:2]
+        )
+        return candidates[0] if len(candidates) == 1 else None
+    except Exception:
+        return None
 
 class ClientViewSet(viewsets.ModelViewSet):
     """CRUD API for clients and commercial status transitions.
@@ -48,11 +73,12 @@ class ClientViewSet(viewsets.ModelViewSet):
             
         try:
             profile = user.profile
-            if profile.role and profile.role.name in ['Ventas', 'Gerente de Cuenta']:
-                full_name = f"{user.first_name} {user.last_name}".strip()
-                if not full_name:
-                    full_name = user.username
-                return queryset.filter(account_manager__icontains=full_name)
+            if profile.role:
+                role_name = profile.role.name
+                if role_name in ['Ventas', 'Gerente de Cuenta']:
+                    return queryset.filter(account_manager=user)
+                if role_name == 'Asistente de Gerencia':
+                    return queryset
         except Exception:
             pass
             
@@ -296,7 +322,8 @@ class ImportClientsView(APIView):
                 service_location = get_col(row, ['UBICACION DEL SERVICIO', 'UBICACIÓN DEL SERVICIO', 'UBICACION', 'UBICACIÓN'])[:255]
                 classification_str = get_col(row, ['CLASIFICACION DEL CLIENTE', 'CLASIFICACIÓN DEL CLIENTE', 'CLASIFICACION', 'CLASIFICACIÓN']).strip().upper()
                 classification = 'ACTIVE' if 'ACTIVO' in classification_str else 'PROSPECT'
-                account_manager = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])[:255]
+                account_manager_text = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])
+                account_manager = resolve_account_manager_user(account_manager_text)
                 
                 # We need tax_id and email. Will use dummy if empty.
                 tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"[:50]

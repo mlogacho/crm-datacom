@@ -21,6 +21,26 @@ export default function ClientsList() {
     const [services, setServices] = useState([]);
     const [accountManagers, setAccountManagers] = useState([]);
 
+    const [isReportLoading, setIsReportLoading] = useState(false);
+    const [reportMes, setReportMes] = useState(new Date().getMonth() + 1);
+    const [reportAnio, setReportAnio] = useState(new Date().getFullYear());
+
+    const MONTH_OPTIONS = [
+        { value: 1, label: 'Enero' },
+        { value: 2, label: 'Febrero' },
+        { value: 3, label: 'Marzo' },
+        { value: 4, label: 'Abril' },
+        { value: 5, label: 'Mayo' },
+        { value: 6, label: 'Junio' },
+        { value: 7, label: 'Julio' },
+        { value: 8, label: 'Agosto' },
+        { value: 9, label: 'Septiembre' },
+        { value: 10, label: 'Octubre' },
+        { value: 11, label: 'Noviembre' },
+        { value: 12, label: 'Diciembre' },
+    ];
+    const YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index);
+
     const [isIdFilterModalOpen, setIsIdFilterModalOpen] = useState(false); // Probablemente no se usa aquí pero mantengo orden
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -106,7 +126,7 @@ export default function ClientsList() {
         city: '',
         segment: '',
         service_location: '',
-        account_manager: '',
+        account_manager: '', // stores User.id or ''
         is_active: true,
         classification: 'PROSPECT'
     };
@@ -167,7 +187,8 @@ export default function ClientsList() {
                 city: client.city || '',
                 segment: client.segment || '',
                 service_location: client.service_location || '',
-                account_manager: client.account_manager || '',
+                account_manager: client.account_manager ?? '',
+                account_manager_name: client.account_manager_name || '',
                 assigned_services: client.assigned_services || [],
                 total_services_count: client.total_services_count || 0,
                 total_mrc: client.total_mrc || 0,
@@ -228,6 +249,64 @@ export default function ClientsList() {
         ).join(' ');
     };
 
+    const escapeCsvValue = (value) => {
+        const raw = value == null ? '' : String(value);
+        return `"${raw.replace(/"/g, '""')}"`;
+    };
+
+    const downloadCsv = (rows, filename) => {
+        const headers = ['CLIENTE','SERVICIO','SERVICIO SIN IVA','OBSERVACIONES','FACTURA','CRÉDITO','MES','AÑO'];
+        const csvLines = [headers.join(';')];
+
+        rows.forEach(row => {
+            csvLines.push([
+                escapeCsvValue(row.client_name),
+                escapeCsvValue(row.service_name),
+                escapeCsvValue(row.service_amount),
+                escapeCsvValue(row.observations),
+                escapeCsvValue(row.factura),
+                escapeCsvValue(row.credito),
+                escapeCsvValue(row.mes),
+                escapeCsvValue(row.anio),
+            ].join(';'));
+        });
+
+        const blob = new Blob([csvLines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportMonthlyReport = async () => {
+        setIsReportLoading(true);
+        try {
+            const res = await axios.get('/api/billing/records/', {
+                params: {
+                    mes: reportMes,
+                    anio: reportAnio,
+                }
+            });
+            const rows = res.data.results ? res.data.results : res.data;
+            if (!rows || rows.length === 0) {
+                alert(`No hay registros de facturación para ${reportMes}/${reportAnio}.`);
+                setIsReportLoading(false);
+                return;
+            }
+            const filename = `CONTROL_FACTURAS_RECURRENTES_${reportAnio}_${String(reportMes).padStart(2, '0')}.csv`;
+            downloadCsv(rows, filename);
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert('Ocurrió un error al generar el reporte. Verifica la conexión y vuelve a intentarlo.');
+        } finally {
+            setIsReportLoading(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -240,7 +319,8 @@ export default function ClientsList() {
         try {
             const payload = {
                 ...formData,
-                name: formData.name.trim() === '' ? formData.legal_name : formData.name
+                name: formData.name.trim() === '' ? formData.legal_name : formData.name,
+                account_manager: formData.account_manager ? Number(formData.account_manager) : null
             };
             delete payload.tax_id_type;
 
@@ -272,7 +352,7 @@ export default function ClientsList() {
             city: client.city || '',
             segment: client.segment || '',
             service_location: client.service_location || '',
-            account_manager: client.account_manager || '',
+            account_manager: client.account_manager ? String(client.account_manager) : '',
             is_active: client.is_active,
             classification: client.classification || 'PROSPECT'
         });
@@ -284,7 +364,8 @@ export default function ClientsList() {
         try {
             const payload = {
                 ...formData,
-                name: formData.name.trim() === '' ? formData.legal_name : formData.name
+                name: formData.name.trim() === '' ? formData.legal_name : formData.name,
+                account_manager: formData.account_manager ? Number(formData.account_manager) : null
             };
             delete payload.tax_id_type;
 
@@ -727,7 +808,7 @@ export default function ClientsList() {
     const uniqueRegions = [...new Set(clients.map(c => c.region).filter(Boolean))];
     const uniqueSegments = [...new Set(clients.map(c => c.segment).filter(Boolean))];
     const uniqueServiceLocations = [...new Set(clients.map(c => c.service_location).filter(Boolean))];
-    const uniqueManagers = [...new Set(clients.map(c => c.account_manager).filter(Boolean))];
+    const uniqueManagers = [...new Set(clients.map(c => c.account_manager_name).filter(Boolean))];
 
     const filteredClients = clients.filter(client => {
         const matchSearch = String(client.name || '').toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -740,7 +821,7 @@ export default function ClientsList() {
         const matchRegion = filters.region === '' || client.region === filters.region;
         const matchSegment = filters.segment === '' || client.segment === filters.segment;
         const matchServiceLocation = filters.service_location === '' || client.service_location === filters.service_location;
-        const matchManager = filters.account_manager === '' || client.account_manager === filters.account_manager;
+        const matchManager = filters.account_manager === '' || client.account_manager_name === filters.account_manager;
 
         return matchSearch && matchType && matchStatus && matchRegion && matchSegment && matchServiceLocation && matchManager;
     });
@@ -859,10 +940,10 @@ export default function ClientsList() {
                 <select name="account_manager" value={formData.account_manager} onChange={handleInputChange} className="mt-1 input-field bg-white">
                     <option value="">Seleccione un Gerente...</option>
                     {accountManagers.map(mgr => (
-                        <option key={mgr.id} value={mgr.full_name}>{mgr.full_name}</option>
+                        <option key={mgr.id} value={mgr.id}>{mgr.full_name}</option>
                     ))}
-                    {!accountManagers.find(m => m.full_name === formData.account_manager) && formData.account_manager && (
-                        <option value={formData.account_manager}>{formData.account_manager}</option>
+                    {!accountManagers.find(m => String(m.id) === String(formData.account_manager)) && formData.account_manager && (
+                        <option value={formData.account_manager}>ID #{formData.account_manager}</option>
                     )}
                 </select>
             </div>
@@ -900,7 +981,39 @@ export default function ClientsList() {
                     <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900">Directorio de Clientes</h1>
                     <p className="mt-2 text-sm text-slate-600">Gestiona toda la cartera de clientes de DATACOM S.A.</p>
                 </div>
-                <div className="mt-4 sm:mt-0 flex items-center gap-3">
+                <div className="mt-4 sm:mt-0 flex items-center gap-3 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className="text-xs font-semibold text-slate-500">Mes</label>
+                        <select
+                            className="input-field bg-white text-sm py-2"
+                            value={reportMes}
+                            onChange={(e) => setReportMes(Number(e.target.value))}
+                        >
+                            {MONTH_OPTIONS.map(option => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className="text-xs font-semibold text-slate-500">Año</label>
+                        <select
+                            className="input-field bg-white text-sm py-2"
+                            value={reportAnio}
+                            onChange={(e) => setReportAnio(Number(e.target.value))}
+                        >
+                            {YEAR_OPTIONS.map(option => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button
+                        className="btn-outline flex items-center gap-2"
+                        onClick={handleExportMonthlyReport}
+                        disabled={isReportLoading}
+                    >
+                        <Download className="w-4 h-4" />
+                        <span>{isReportLoading ? 'Generando...' : 'Descargar Reporte'}</span>
+                    </button>
                     <button
                         className="btn-outline flex items-center gap-2"
                         onClick={() => setIsImportModalOpen(true)}
@@ -1070,7 +1183,7 @@ export default function ClientsList() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {formatManagerName(client.account_manager)}</div>
+                                        <div className="text-sm text-slate-900"><span className="font-semibold text-slate-500">G:</span> {formatManagerName(client.account_manager_name)}</div>
                                         <div className="text-xs text-slate-500 mt-1">{client.region} {client.region && client.city ? '-' : ''} {client.city}</div>
                                         <div className="text-xs text-slate-500">{client.segment}{client.service_location && ` | ${client.service_location}`}</div>
                                     </td>

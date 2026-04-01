@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Search, Shield, Users, Pencil, Trash2, Eye, EyeOff, RefreshCw, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Shield, Users, Pencil, Trash2, Eye, EyeOff, RefreshCw, Mail, CheckCircle, AlertCircle, Database, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const VIEWS_OPTIONS = [
@@ -77,6 +77,31 @@ export default function Settings() {
     // Auth context to check if current user is superadmin
     const { userPermissions } = useAuth();
     const isSuperAdmin = userPermissions?.is_superuser;
+
+    const [generatingBackup, setGeneratingBackup] = useState(false);
+
+    const handleGenerateBackup = async () => {
+        setGeneratingBackup(true);
+        try {
+            const res = await axios.get('/api/core/backup/', { responseType: 'blob' });
+            const contentDisposition = res.headers['content-disposition'] || '';
+            const match = contentDisposition.match(/filename="([^"]+)"/);
+            const filename = match ? match[1] : `datacom_crm_backup_${new Date().toISOString().slice(0,19).replace(/[:.]/g, '-')}.dump`;
+            const url = URL.createObjectURL(new Blob([res.data], { type: 'application/octet-stream' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Error al generar el respaldo. Intente nuevamente.');
+            console.error(err);
+        } finally {
+            setGeneratingBackup(false);
+        }
+    };
 
     useEffect(() => {
         fetchRoles();
@@ -301,8 +326,25 @@ export default function Settings() {
     return (
         <div className="animate-fade-in pb-10">
             <div className="mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900">Configuración</h1>
-                <p className="mt-2 text-sm text-slate-600">Gestión de roles de acceso y usuarios del sistema.</p>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900">Configuración</h1>
+                        <p className="mt-2 text-sm text-slate-600">Gestión de roles de acceso y usuarios del sistema.</p>
+                    </div>
+                    {isSuperAdmin && (
+                        <button
+                            onClick={handleGenerateBackup}
+                            disabled={generatingBackup}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors shrink-0"
+                            title="Genera un volcado completo de PostgreSQL (.dump)"
+                        >
+                            {generatingBackup
+                                ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                : <Database className="w-4 h-4" />}
+                            {generatingBackup ? 'Generando...' : 'Generar Respaldo BDD'}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Tabs */}

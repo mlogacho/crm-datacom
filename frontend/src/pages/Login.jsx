@@ -45,7 +45,11 @@ export default function Login() {
             }
         } catch (err) {
             console.error('Error logging in:', err);
-            setError('Credenciales incorrectas. Por favor, intente de nuevo.');
+            if (!err.response) {
+                setError('No se pudo conectar con el servidor. Verifique la configuración de red o la URL de la API.');
+            } else {
+                setError('Credenciales incorrectas. Por favor, intente de nuevo.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -66,7 +70,11 @@ export default function Login() {
             navigate('/');
         } catch (err) {
             console.error('Error in 2FA Setup:', err);
-            setError(err.response?.data?.error || 'Código incorrecto. Intente nuevamente.');
+            if (!err.response) {
+                setError('No se pudo conectar con el servidor. Verifique la configuración de red o la URL de la API.');
+            } else {
+                setError(err.response?.data?.error || 'Código incorrecto. Intente nuevamente.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -86,7 +94,11 @@ export default function Login() {
             navigate('/');
         } catch (err) {
             console.error('Error verifying 2FA:', err);
-            setError('Código de autenticador inválido. Intente de nuevo.');
+            if (!err.response) {
+                setError('No se pudo conectar con el servidor. Verifique la configuración de red o la URL de la API.');
+            } else {
+                setError('Código de autenticador inválido. Intente de nuevo.');
+            }
         } finally {
             setIsLoading(false);
         }

@@ -276,6 +276,8 @@ def get_account_managers(request):
 
     Commercial action:
     - Supports client assignment workflows in sales operations.
+        - Returned `id` is the Django User.id expected by `account_manager`
+            in client create/update payloads.
 
     Response type:
     - JSON list of users.
@@ -455,3 +457,101 @@ CRM Datacom"""
         "message": f"Contraseña generada y enviada a {user.email}",
         "generated_password": new_password
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generate_backup(request):
+    """Generate a pg_dump backup of the PostgreSQL database and return it for download.
+
+    Only accessible to superadministrators. Uses pg_dump with maximum compression
+    (custom format, -Z 9). The PGPASSWORD env variable is used to avoid exposing
+    credentials in the process list.
+
+    Response type:
+    - Binary file download (.dump) on success.
+    - JSON error payload on failure.
+    """
+    if not request.user.is_superuser:
+        return Response(
+            {"error": "Acceso denegado. Solo el súper administrador puede generar respaldos."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    import subprocess
+    import tempfile
+    import os
+    from django.http import HttpResponse
+    from django.conf import settings as django_settings
+    from datetime import datetime
+
+    db = django_settings.DATABASES['default']
+
+    if 'postgresql' not in db.get('ENGINE', ''):
+        return Response(
+            {"error": "El respaldo automático solo está disponible para bases de datos PostgreSQL."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    db_name = db.get('NAME', '')
+    db_user = db.get('USER', 'postgres')
+    db_password = db.get('PASSWORD', '')
+    db_host = db.get('HOST', 'localhost')
+    db_port = str(db.get('PORT', '5432'))
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"datacom_crm_backup_{timestamp}.dump"
+
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix='.dump')
+    os.close(tmp_fd)
+
+    try:
+        env = os.environ.copy()
+        env['PGPASSWORD'] = db_password
+
+        result = subprocess.run(
+            [
+                'pg_dump',
+                '-U', db_user,
+                '-h', db_host,
+                '-p', db_port,
+                '-d', db_name,
+                '-F', 'c',
+                '-Z', '9',
+                '-f', tmp_path,
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if result.returncode != 0:
+            return Response(
+                {"error": f"Error al generar el respaldo: {result.stderr}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        with open(tmp_path, 'rb') as f:
+            content = f.read()
+
+        response = HttpResponse(content, content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Length'] = len(content)
+        return response
+
+    except subprocess.TimeoutExpired:
+        return Response(
+            {"error": "El proceso de respaldo excedió el tiempo límite (5 min)."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"Error inesperado: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass

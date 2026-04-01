@@ -56,11 +56,12 @@ class ClientServiceViewSet(viewsets.ModelViewSet):
             
         try:
             profile = user.profile
-            if profile.role and profile.role.name in ['Ventas', 'Gerente de Cuenta']:
-                full_name = f"{user.first_name} {user.last_name}".strip()
-                if not full_name:
-                    full_name = user.username
-                return queryset.filter(client__account_manager__icontains=full_name)
+            if profile.role:
+                role_name = profile.role.name
+                if role_name in ['Ventas', 'Gerente de Cuenta']:
+                    return queryset.filter(client__account_manager=user)
+                if role_name == 'Asistente de Gerencia':
+                    return queryset
         except Exception:
             pass
             

@@ -98,20 +98,29 @@ export default function ServicesList() {
     };
 
     const handleEditClick = (service) => {
-        setEditingService(service);
+        setEditingService({ ...service, new_note: '' });
         setIsEditModalOpen(true);
     };
 
     const handleEditSubmit = async (e) => {
         e.preventDefault();
         try {
+            const now = new Date();
+            const timestamp = now.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+
+            let updatedNotes = editingService.notes || '';
+            if (editingService.new_note && editingService.new_note.trim() !== '') {
+                const separator = updatedNotes ? "\n---\n" : "";
+                updatedNotes = `${updatedNotes}${separator}[${timestamp}]: ${editingService.new_note}`;
+            }
+
             await axios.patch(`/api/services/client-services/${editingService.id}/`, {
                 status: editingService.status,
                 agreed_price: editingService.agreed_price,
-                nrc: editingService.nrc,
+                nrc: editingService.nrc || 0,
                 bandwidth: editingService.bandwidth,
                 service_location: editingService.service_location,
-                notes: editingService.notes
+                notes: updatedNotes
             });
             fetchAssignedServices();
             setIsEditModalOpen(false);
@@ -519,112 +528,119 @@ export default function ServicesList() {
                 </div>
             )}
 
-            {/* Modal de EDICIÓN de Estado y Monto */}
+            {/* Modal de EDICIÓN de Estado y Monto — v2.0 */}
             {
                 isEditModalOpen && editingService && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setIsEditModalOpen(false)}></div>
 
-                        <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+                        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
                             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-slate-900">Actualizar Servicio</h3>
-                                <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                                    <span className="sr-only">Cerrar</span>
-                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                <h3 className="text-xl font-bold text-slate-800">Actualizar Servicio v2.0</h3>
+                                <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2">
+                                    <Plus className="w-6 h-6 rotate-45" />
                                 </button>
                             </div>
 
-                            <form onSubmit={handleEditSubmit} className="p-6">
-                                <div className="grid grid-cols-1 gap-6">
+                            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Estado Actual en Embudo</label>
+                                    <select
+                                        name="status"
+                                        value={editingService.status}
+                                        onChange={(e) => setEditingService({ ...editingService, status: e.target.value })}
+                                        className="input-field w-full bg-white"
+                                        required
+                                    >
+                                        <option value="BACKLOG">Backlog</option>
+                                        <option value="INSTALLED">Instalado</option>
+                                        <option value="PROSPECTING">Prospección</option>
+                                        <option value="CONTACTED">Contactado</option>
+                                        <option value="FIRST_MEETING">Primera Cita</option>
+                                        <option value="OFFERED">Ofertado</option>
+                                        <option value="FOLLOW_UP">Seguimiento</option>
+                                        <option value="CLOSING_MEETING">Cita de Cierre</option>
+                                        <option value="DEMO">Demo</option>
+                                        <option value="CONTRACT_SIGNED">Firma de Contrato</option>
+                                        <option value="LOST">Negocio Perdido</option>
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium leading-6 text-slate-900">Estado Actual en Embudo</label>
-                                        <select
-                                            name="status"
-                                            value={editingService.status}
-                                            onChange={(e) => setEditingService({ ...editingService, status: e.target.value })}
-                                            className="mt-1 input-field bg-white"
-                                        >
-                                            <option value="PROSPECTING">Prospección</option>
-                                            <option value="CONTACTED">Contactado</option>
-                                            <option value="FIRST_MEETING">Primera Cita</option>
-                                            <option value="OFFERED">Ofertado</option>
-                                            <option value="FOLLOW_UP">Seguimiento</option>
-                                            <option value="CLOSING_MEETING">Cita de Cierre</option>
-                                            <option value="DEMO">Demo</option>
-                                            <option value="CONTRACT_SIGNED">Firma de Contrato</option>
-                                            <option value="BACKLOG">Backlog</option>
-                                            <option value="INSTALLED">Instalado (Activo)</option>
-                                            <option value="LOST">Negocio Perdido</option>
-                                        </select>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">Monto MRC ($)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            name="agreed_price"
+                                            value={editingService.agreed_price}
+                                            onChange={(e) => setEditingService({ ...editingService, agreed_price: e.target.value })}
+                                            className="input-field w-full"
+                                            required
+                                        />
                                     </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium leading-6 text-slate-900">Monto MRC ($)</label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                name="agreed_price"
-                                                value={editingService.agreed_price}
-                                                onChange={(e) => setEditingService({ ...editingService, agreed_price: e.target.value })}
-                                                className="mt-1 input-field"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium leading-6 text-slate-900">Monto NRC ($)</label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                name="nrc"
-                                                value={editingService.nrc || ''}
-                                                onChange={(e) => setEditingService({ ...editingService, nrc: e.target.value })}
-                                                className="mt-1 input-field"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium leading-6 text-slate-900">Velocidad (Mbps)</label>
-                                            <input
-                                                type="text"
-                                                name="bandwidth"
-                                                value={editingService.bandwidth || ''}
-                                                onChange={(e) => setEditingService({ ...editingService, bandwidth: e.target.value })}
-                                                className="mt-1 input-field"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium leading-6 text-slate-900">Ubicación</label>
-                                            <input
-                                                type="text"
-                                                name="service_location"
-                                                value={editingService.service_location || ''}
-                                                onChange={(e) => setEditingService({ ...editingService, service_location: e.target.value })}
-                                                className="mt-1 input-field"
-                                            />
-                                        </div>
-                                    </div>
-
                                     <div>
-                                        <label className="block text-sm font-medium leading-6 text-slate-900">Observaciones</label>
-                                        <textarea
-                                            name="notes"
-                                            rows={2}
-                                            value={editingService.notes || ''}
-                                            onChange={(e) => setEditingService({ ...editingService, notes: e.target.value })}
-                                            className="mt-1 input-field"
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">Monto NRC ($)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            name="nrc"
+                                            value={editingService.nrc || ''}
+                                            onChange={(e) => setEditingService({ ...editingService, nrc: e.target.value })}
+                                            className="input-field w-full"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="mt-8 flex items-center justify-end gap-x-4 border-t border-slate-100 pt-6">
-                                    <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-sm font-semibold leading-6 text-slate-900 hover:text-slate-700">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">Velocidad (Mbps)</label>
+                                        <input
+                                            type="text"
+                                            name="bandwidth"
+                                            value={editingService.bandwidth || ''}
+                                            onChange={(e) => setEditingService({ ...editingService, bandwidth: e.target.value })}
+                                            className="input-field w-full"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">Ubicación</label>
+                                        <input
+                                            type="text"
+                                            name="service_location"
+                                            value={editingService.service_location || ''}
+                                            onChange={(e) => setEditingService({ ...editingService, service_location: e.target.value })}
+                                            className="input-field w-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1">Historial de Observaciones</label>
+                                    <div className="mb-2 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100 text-[11px] text-slate-600 max-h-32 overflow-y-auto whitespace-pre-wrap shadow-inner">
+                                        {editingService.notes || "No hay notas previas en el sistema."}
+                                    </div>
+                                    <textarea
+                                        value={editingService.new_note || ''}
+                                        onChange={(e) => setEditingService({ ...editingService, new_note: e.target.value })}
+                                        className="input-field w-full border-indigo-200 focus:ring-indigo-500 focus:border-indigo-500"
+                                        rows={3}
+                                        placeholder="Agrega una nueva nota que se guardará con fecha y hora..."
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsEditModalOpen(false)}
+                                        className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-800"
+                                    >
                                         Cancelar
                                     </button>
-                                    <button type="submit" className="btn-primary">
+                                    <button
+                                        type="submit"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                                    >
                                         Guardar Cambios
                                     </button>
                                 </div>

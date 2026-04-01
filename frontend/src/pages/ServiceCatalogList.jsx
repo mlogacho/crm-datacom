@@ -365,7 +365,7 @@ export default function ServiceCatalogList() {
                                     type="submit"
                                     className="btn-primary"
                                 >
-                                    {modalMode === 'add' ? 'Guardar Servicio' : 'Actualizar Servicio'}
+                                    {modalMode === 'add' ? 'Guardar Servicio' : 'Actualizar Servicio v2.0'}
                                 </button>
                             </div>
                         </form>

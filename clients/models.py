@@ -6,6 +6,7 @@ including prospects, clients, their contacts, and status tracking throughout the
 """
 
 from django.db import models
+from django.contrib.auth.models import User
 
 # class ClientType(models.TextChoices):
 #     HOUSING = 'HOUSING', 'Housing'
@@ -85,7 +86,7 @@ class Client(models.Model):
         city (str): City/locality of client operations
         segment (str): Market segment classification (legacy field)
         service_location (str): Physical location where services are delivered
-        account_manager (str): Name of assigned sales/account manager
+        account_manager (User): Assigned sales/account manager user reference
         is_active (bool): Whether client record is currently active
         created_at (datetime): Record creation timestamp
         updated_at (datetime): Last modification timestamp
@@ -115,7 +116,14 @@ class Client(models.Model):
     city = models.CharField(max_length=100, verbose_name="Ciudad", blank=True, null=True)
     segment = models.CharField(max_length=100, verbose_name="Segmento", blank=True, null=True)
     service_location = models.CharField(max_length=255, verbose_name="Ubicación del Servicio", blank=True, null=True)
-    account_manager = models.CharField(max_length=255, verbose_name="Gerente de Cuenta", blank=True, null=True)
+    account_manager = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_clients',
+        verbose_name="Gerente de Cuenta"
+    )
     
     is_active = models.BooleanField(default=True, verbose_name="Activo")
     created_at = models.DateTimeField(auto_now_add=True)

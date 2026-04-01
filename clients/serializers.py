@@ -34,6 +34,7 @@ class ClientSerializer(serializers.ModelSerializer):
     total_services_count = serializers.SerializerMethodField()
     total_mrc = serializers.SerializerMethodField()
     total_nrc = serializers.SerializerMethodField()
+    account_manager_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -43,8 +44,11 @@ class ClientSerializer(serializers.ModelSerializer):
             'address', 'client_type_new', 'region', 'city',
             'segment', 'service_location', 'account_manager', 'is_active', 'created_at',
             'updated_at', 'contacts', 'status_history', 'assigned_services',
-            'total_services_count', 'total_mrc', 'total_nrc'
+            'total_services_count', 'total_mrc', 'total_nrc', 'account_manager_name'
         ]
+        extra_kwargs = {
+            'account_manager': {'required': False, 'allow_null': True},
+        }
 
     def create(self, validated_data):
         """Create client and bootstrap initial ClientService if catalog is set."""
@@ -101,3 +105,10 @@ class ClientSerializer(serializers.ModelSerializer):
         """Return aggregated non-recurring revenue across services."""
         from django.db.models import Sum
         return obj.services.aggregate(total=Sum('nrc'))['total'] or 0.00
+
+    def get_account_manager_name(self, obj):
+        """Return account manager full name fallbacking to username."""
+        if obj.account_manager:
+            full = f"{obj.account_manager.first_name} {obj.account_manager.last_name}".strip()
+            return full or obj.account_manager.username
+        return None

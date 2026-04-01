@@ -11,8 +11,26 @@ import Billing from './pages/Billing';
 import Login from './pages/Login';
 import { useAuth } from './context/AuthContext';
 
-// Configuración base de axios para todas las peticiones
-axios.defaults.baseURL = '/';
+const getDefaultApiBaseURL = () => {
+  const envBaseUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envBaseUrl) return envBaseUrl;
+
+  // En desarrollo local, el proxy Vite se encarga de redirigir las peticiones /api al backend.
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return '/';
+  }
+
+  // Si el CRM se está cargando desde el portal ERP en el puerto 8081,
+  // la API debe apuntar explícitamente al backend Django local en 8000.
+  if (window.location.port === '8081') {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+
+  return '/';
+};
+
+const apiBaseURL = getDefaultApiBaseURL();
+axios.defaults.baseURL = apiBaseURL;
 
 function ProtectedRoute({ children }) {
   const token = sessionStorage.getItem('authToken');
