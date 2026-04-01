@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList, Server, FileText, Download } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmartphone, Trash2, Upload, ClipboardList, Server, FileText, Download, FileDown } from 'lucide-react';
 import axios from 'axios';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function ClientsList() {
     const location = useLocation();
@@ -280,6 +282,120 @@ export default function ClientsList() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+    };
+
+    // ── Excel report export (backend) ────────────────────────────────────
+    const downloadExcelReport = () => {
+        const params = new URLSearchParams();
+        params.set('mes',  reportMes);
+        params.set('anio', reportAnio);
+        const a = document.createElement('a');
+        a.href = `/api/billing/report/export/?${params.toString()}`;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    // ── PDF report export (client-side jsPDF) ────────────────────────────
+    const downloadPdfReport = async () => {
+        const NAVY       = [31, 56, 100];
+        const WHITE      = [255, 255, 255];
+        const YELLOW     = [255, 255, 0];
+        const LIGHT_BLUE = [217, 225, 242];
+        const BLACK      = [0, 0, 0];
+        const GREY       = [217, 217, 217];
+
+        let reportData;
+        try {
+            const res = await axios.get(`/api/billing/report/data/?mes=${reportMes}&anio=${reportAnio}`);
+            reportData = res.data;
+        } catch (err) {
+            alert('Error al obtener datos del reporte: ' + (err.response?.data?.error || err.message));
+            return;
+        }
+        if (!reportData.clients || reportData.clients.length === 0) {
+            alert('No hay servicios activos para generar el reporte.');
+            return;
+        }
+
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+        const logoImg = new window.Image();
+        logoImg.src = '/datacom_logo.png';
+
+        const _build = () => {
+            const mesLabel  = reportData.mes_label || '';
+            const yearLabel = String(reportData.anio);
+            let startY = 14;
+            try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 14); } catch (_) {}
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(...NAVY);
+            doc.text(`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, doc.internal.pageSize.width / 2, startY, { align: 'center' });
+            startY += 5;
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text(mesLabel ? `Período: ${mesLabel} ${yearLabel}` : `Año: ${yearLabel}`, doc.internal.pageSize.width / 2, startY, { align: 'center' });
+            startY += 5;
+
+            const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
+            const body = [];
+            reportData.clients.forEach(client => {
+                client.records.forEach((rec, idx) => {
+                    body.push([
+                        idx === 0 ? client.name : '',
+                        rec.service_label || '—',
+                        fmt(rec.service_amount), fmt(rec.iva_amount), fmt(rec.total),
+                        idx === 0 ? fmt(client.total) : '',
+                        rec.observations || '', rec.factura || '', rec.credito || '',
+                    ]);
+                });
+                body.push(['', '', '', '', '', '', '', '', '']);
+            });
+            body.push(['TOTAL RECURRENTES', '', fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total), '', '', '', '']);
+            body.push(['__ADICIONALES__', '', '', '', '', '', '', '', '']);
+            (reportData.additionals || []).forEach(a => {
+                body.push([a.client_name || '', a.service_label || '—', fmt(a.service_amount), fmt(a.iva_amount), fmt(a.total), '', a.observations || '', a.factura || '', a.credito || '']);
+            });
+            body.push(['TOTAL ADICIONALES', '', fmt(reportData.add_sin_iva || 0), fmt(reportData.add_iva || 0), fmt(reportData.add_total || 0), '', '', '', '']);
+            body.push(['', '', '', '', '', '', '', '', '']);
+            body.push(['TOTAL FACTURACIÓN', '', fmt(reportData.total_facturacion_sin_iva), fmt(reportData.total_facturacion_iva), fmt(reportData.total_facturacion), '', '', '', '']);
+
+            autoTable(doc, {
+                startY,
+                head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA', 'TOTAL', 'Fact. Total Cliente', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
+                body,
+                styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1, overflow: 'linebreak' },
+                headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+                columnStyles: {
+                    0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 65 },
+                    2: { cellWidth: 22, halign: 'right' }, 3: { cellWidth: 20, halign: 'right' },
+                    4: { cellWidth: 22, halign: 'right' }, 5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+                    6: { cellWidth: 30 }, 7: { cellWidth: 22, halign: 'center' }, 8: { cellWidth: 22, halign: 'center' },
+                },
+                didParseCell(data) {
+                    const row = data.row.raw;
+                    const isTotal = row[0] === 'TOTAL RECURRENTES';
+                    const isAddH  = row[0] === '__ADICIONALES__';
+                    const isAddT  = row[0] === 'TOTAL ADICIONALES';
+                    const isGrand = row[0] === 'TOTAL FACTURACIÓN';
+                    const isSep   = row.every(c => c === '');
+                    if (isTotal || isAddT) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; }
+                    if (isGrand) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; }
+                    if (isAddH) {
+                        data.cell.styles.fillColor = GREY; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; data.cell.styles.halign = 'center';
+                        data.cell.text = data.column.index === 0 ? ['ADICIONALES NO RECURRENTES'] : [''];
+                    }
+                    if (isSep) { data.cell.styles.minCellHeight = 2; data.cell.styles.fillColor = WHITE; }
+                    if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
+                        data.cell.styles.fillColor = LIGHT_BLUE;
+                    }
+                },
+                margin: { left: 8, right: 8 },
+            });
+            doc.save(mesLabel ? `Facturacion_${mesLabel}_${yearLabel}.pdf` : `Facturacion_${yearLabel}.pdf`);
+        };
+        if (logoImg.complete) _build(); else { logoImg.onload = _build; logoImg.onerror = _build; }
     };
 
     const handleExportMonthlyReport = async () => {
@@ -1007,12 +1123,20 @@ export default function ClientsList() {
                         </select>
                     </div>
                     <button
-                        className="btn-outline flex items-center gap-2"
-                        onClick={handleExportMonthlyReport}
-                        disabled={isReportLoading}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                        onClick={downloadExcelReport}
+                        title="Descargar reporte Excel del período seleccionado"
                     >
-                        <Download className="w-4 h-4" />
-                        <span>{isReportLoading ? 'Generando...' : 'Descargar Reporte'}</span>
+                        <FileDown className="w-4 h-4" />
+                        <span>Descargar Excel</span>
+                    </button>
+                    <button
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                        onClick={downloadPdfReport}
+                        title="Descargar reporte PDF del período seleccionado"
+                    >
+                        <FileText className="w-4 h-4" />
+                        <span>Descargar PDF</span>
                     </button>
                     <button
                         className="btn-outline flex items-center gap-2"
