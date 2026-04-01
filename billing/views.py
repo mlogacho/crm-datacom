@@ -6,12 +6,14 @@ monthly billing records, and bulk billing imports.
 
 import uuid
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
 
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Invoice, InvoiceItem, BillingRecord
+from .models import Invoice, InvoiceItem, BillingRecord, MONTH_CHOICES
 from .serializers import InvoiceSerializer, InvoiceItemSerializer, BillingRecordSerializer
 from clients.models import Client
 from services.models import ServiceCatalog
@@ -190,3 +192,57 @@ class BulkCreateBillingView(APIView):
             },
             status=response_status,
         )
+
+
+class BillingReportExportView(APIView):
+    """
+    Generate a downloadable Excel report in CONTROL FACTURAS RECURRENTES format.
+
+    Query params:
+        mes    — month number 1-12 (optional; omit for full year)
+        anio   — 4-digit year (defaults to current year)
+        format — 'excel' (default)
+    """
+
+    def get(self, request):
+        mes_str  = request.query_params.get('mes', '')
+        anio_str = request.query_params.get('anio', '')
+
+        # Validate year
+        try:
+            anio = int(anio_str) if anio_str else datetime.now().year
+            if not (1900 <= anio <= 2100):
+                raise ValueError()
+        except (ValueError, TypeError):
+            return Response({'error': 'Año inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate month (optional)
+        mes = None
+        if mes_str:
+            try:
+                mes = int(mes_str)
+                if not (1 <= mes <= 12):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                return Response({'error': 'Mes inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from .report_excel import generate_billing_excel
+            buf, mes_label = generate_billing_excel(mes, anio)
+        except Exception as exc:
+            return Response(
+                {'error': f'Error al generar el reporte: {str(exc)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        suffix   = f'{mes_label}_{anio}' if mes_label else str(anio)
+        filename = f'Facturacion_Mensual_{suffix}.xlsx'
+
+        response = HttpResponse(
+            buf.read(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ),
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response

@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Upload, Download, Search, Trash2, FileSpreadsheet,
   X, CheckCircle, AlertCircle, DollarSign, FileText,
-  ChevronRight, ChevronDown, BarChart2,
+  ChevronRight, ChevronDown, BarChart2, Pencil, FileDown,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import {
@@ -103,6 +105,19 @@ export default function Billing() {
   const [importResult, setImportResult] = useState(null);
   const [dragOver,     setDragOver]     = useState(false);
   const [showReport,   setShowReport]   = useState(false);
+
+  // Edit modal
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    service_catalog: '',
+    service_amount: '',
+    observations: '',
+    factura: '',
+    credito: '',
+    mes: '',
+    anio: '',
+  });
 
   const fileRef = useRef();
 
@@ -260,6 +275,70 @@ export default function Billing() {
     } catch (e) { console.error(e); }
   };
 
+  const openEditModal = (record) => {
+    setEditingRecord(record);
+    setEditForm({
+      service_catalog: record.service_catalog || '',
+      service_amount: String(parseFloat(record.service_amount || 0)),
+      observations: record.observations || '',
+      factura: record.factura || '',
+      credito: record.credito || '',
+      mes: String(record.mes || ''),
+      anio: String(record.anio || ''),
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditingRecord(null);
+    setSavingEdit(false);
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord) return;
+
+    const serviceAmount = parseFloat(editForm.service_amount);
+    const mes = parseInt(editForm.mes, 10);
+    const anio = parseInt(editForm.anio, 10);
+
+    if (Number.isNaN(serviceAmount) || serviceAmount < 0) {
+      alert('Ingrese un valor válido para "Servicio sin IVA".');
+      return;
+    }
+    if (Number.isNaN(mes) || mes < 1 || mes > 12) {
+      alert('El mes debe estar entre 1 y 12.');
+      return;
+    }
+    if (Number.isNaN(anio) || anio < 1900 || anio > 2100) {
+      alert('Ingrese un año válido.');
+      return;
+    }
+
+    const payload = {
+      service_catalog: editForm.service_catalog === '' ? null : Number(editForm.service_catalog),
+      service_amount: serviceAmount,
+      observations: editForm.observations,
+      factura: editForm.factura,
+      credito: editForm.credito,
+      mes,
+      anio,
+    };
+
+    setSavingEdit(true);
+    try {
+      await axios.patch(`/api/billing/records/${editingRecord.id}/`, payload);
+      await fetchRecords();
+      closeEditModal();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'No se pudo actualizar el registro.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const toggleSelectOne = (id) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -305,6 +384,175 @@ export default function Billing() {
       else ids.forEach(id => next.add(id));
       return next;
     });
+  };
+
+  // ── Excel report export (backend) ──────────────────────────────────────
+
+  const downloadExcelReport = () => {
+    const params = new URLSearchParams();
+    if (filters.mes)  params.set('mes',  filters.mes);
+    if (filters.anio) params.set('anio', filters.anio);
+    // Trigger file download via hidden anchor
+    const url = `/api/billing/report/export/?${params.toString()}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // ── PDF report export (client-side jsPDF) ───────────────────────────────
+
+  const downloadPdfReport = () => {
+    // ── Colour constants matching the Excel format ──
+    const NAVY        = [31, 56, 100];   // #1F3864
+    const WHITE       = [255, 255, 255];
+    const YELLOW      = [255, 255, 0];   // totals row
+    const LIGHT_BLUE  = [217, 225, 242]; // client name background
+    const BLACK       = [0, 0, 0];
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+
+    // ── Logo ────────────────────────────────────────────────────────────
+    const logoImg = new window.Image();
+    logoImg.src = '/datacom_logo.png';
+
+    const _buildPdf = () => {
+      const mesLabel  = filters.mes  ? getMesLabel(Number(filters.mes))  : '';
+      const yearLabel = filters.anio || String(CURRENT_YEAR);
+      const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
+      const subtitle  = mesLabel ? `Período: ${mesLabel} ${yearLabel}` : `Año: ${yearLabel}`;
+
+      let startY = 14;
+
+      // Logo
+      try {
+        doc.addImage(logoImg, 'PNG', 10, 6, 38, 14);
+      } catch (_) { /* logo optional */ }
+
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(...NAVY);
+      doc.text(title, doc.internal.pageSize.width / 2, startY, { align: 'center' });
+      startY += 5;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(subtitle, doc.internal.pageSize.width / 2, startY, { align: 'center' });
+      startY += 5;
+
+      // ── Build table body ────────────────────────────────────────────
+      const body = [];
+
+      groupedRecords.forEach(g => {
+        const ftc = g.facturacion_total_cliente;
+        g.rows.forEach((r, idx) => {
+          const row = [
+            idx === 0 ? g.client_name : '',          // A: Cliente
+            r.service_name || r.service_label || '—', // B: Servicio
+            fmtCurrency(r.service_amount),             // C: sin IVA
+            fmtCurrency(r.iva_amount),                 // D: 15% IVA
+            fmtCurrency(r.total),                      // E: Total
+            idx === 0 ? fmtCurrency(ftc) : '',        // F: Fact. Total Cliente
+            r.observations || '',                      // G: Observaciones
+            r.factura      || '',                      // H: Factura
+            r.credito      || '',                      // I: Crédito
+          ];
+          body.push(row);
+        });
+        // empty separator
+        body.push(['', '', '', '', '', '', '', '', '']);
+      });
+
+      // Totals
+      const clientMonthMap = new Map();
+      records.forEach(r => {
+        const key = `${r.client}_${r.mes}_${r.anio}`;
+        clientMonthMap.set(key, parseFloat(r.facturacion_total_cliente || 0));
+      });
+      const grandSinIva  = Array.from(clientMonthMap.values()).reduce((a, b) => a + b, 0);
+      const grandIva     = grandSinIva * 0.15;
+      const grandTotal   = grandSinIva * 1.15;
+
+      body.push([
+        'TOTAL RECURRENTES', '',
+        fmtCurrency(grandSinIva), fmtCurrency(grandIva), fmtCurrency(grandTotal),
+        '', '', '', '',
+      ]);
+      body.push(['', '', '', '', '', '', '', '', '']);
+      body.push([
+        'TOTAL FACTURACIÓN', '',
+        fmtCurrency(grandSinIva), fmtCurrency(grandIva), fmtCurrency(grandTotal),
+        '', '', '', '',
+      ]);
+
+      // ── autoTable ──────────────────────────────────────────────────
+      autoTable(doc, {
+        startY,
+        head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA',
+                'TOTAL', 'Fact. Total Cliente', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
+        body,
+        styles: {
+          fontSize: 7,
+          cellPadding: 1.5,
+          lineColor: BLACK,
+          lineWidth: 0.1,
+          overflow: 'linebreak',
+        },
+        headStyles: {
+          fillColor: NAVY,
+          textColor: WHITE,
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 7.5,
+        },
+        columnStyles: {
+          0: { cellWidth: 35, fontStyle: 'bold' },
+          1: { cellWidth: 65 },
+          2: { cellWidth: 22, halign: 'right' },
+          3: { cellWidth: 20, halign: 'right' },
+          4: { cellWidth: 22, halign: 'right' },
+          5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+          6: { cellWidth: 30 },
+          7: { cellWidth: 22, halign: 'center' },
+          8: { cellWidth: 22, halign: 'center' },
+        },
+        didParseCell(data) {
+          const row = data.row.raw;
+          const isTotal   = row[0] === 'TOTAL RECURRENTES';
+          const isGrand   = row[0] === 'TOTAL FACTURACIÓN';
+          const isSep     = row.every(c => c === '');
+          if (isTotal || isGrand) {
+            data.cell.styles.fillColor = YELLOW;
+            data.cell.styles.textColor = BLACK;
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fontSize  = isGrand ? 9 : 8;
+          }
+          if (isSep) {
+            data.cell.styles.minCellHeight = 2;
+            data.cell.styles.fillColor = WHITE;
+          }
+          // Client name cells — light blue background
+          if (data.column.index === 0 && !isTotal && !isGrand && !isSep && row[0] !== '') {
+            data.cell.styles.fillColor = LIGHT_BLUE;
+          }
+        },
+        margin: { left: 8, right: 8 },
+      });
+
+      const filename = mesLabel
+        ? `Facturacion_${mesLabel}_${yearLabel}.pdf`
+        : `Facturacion_${yearLabel}.pdf`;
+      doc.save(filename);
+    };
+
+    if (logoImg.complete) {
+      _buildPdf();
+    } else {
+      logoImg.onload  = _buildPdf;
+      logoImg.onerror = _buildPdf; // proceed without logo if it fails
+    }
   };
 
   // ── Template download ────────────────────────────────────────────────────
@@ -385,13 +633,31 @@ export default function Billing() {
           <h1 className="text-2xl font-bold text-slate-800">Facturación</h1>
           <p className="text-slate-500 text-sm mt-1">Gestión de facturación mensual por cliente</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={downloadTemplate}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
           >
             <Download className="w-4 h-4" />
             Plantilla
+          </button>
+          <button
+            onClick={downloadExcelReport}
+            disabled={records.length === 0}
+            title={records.length === 0 ? 'No hay registros para exportar' : 'Descargar reporte en Excel'}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            Exportar Excel
+          </button>
+          <button
+            onClick={downloadPdfReport}
+            disabled={records.length === 0}
+            title={records.length === 0 ? 'No hay registros para exportar' : 'Descargar reporte en PDF'}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Exportar PDF
           </button>
           <button
             onClick={() => setShowReport(true)}
@@ -591,6 +857,15 @@ export default function Billing() {
                         <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{getMesLabel(g.mes)}</td>
                         <td className="px-4 py-3 text-center text-slate-700 whitespace-nowrap">{g.anio}</td>
                         <td className="px-4 py-3">
+                          {g.rows.length === 1 && (
+                            <button
+                              onClick={() => openEditModal(g.rows[0])}
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors mr-1"
+                              title="Editar registro"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={async () => {
                               if (!window.confirm(`¿Eliminar todos los servicios de ${g.client_name} (${g.rows.length})?`)) return;
@@ -640,6 +915,13 @@ export default function Billing() {
                             <td className="px-4 py-2.5 text-center text-slate-500 whitespace-nowrap">{r.anio}</td>
                             <td className="px-4 py-2.5">
                               <button
+                                onClick={() => openEditModal(r)}
+                                className="p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors mr-1"
+                                title="Editar"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => handleDelete(r.id)}
                                 className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Eliminar"
@@ -661,6 +943,123 @@ export default function Billing() {
           </div>
         )}
       </div>
+
+      {/* ── Edit Modal ── */}
+      {editingRecord && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Editar registro de facturación</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Cliente: {editingRecord.client_name}</p>
+              </div>
+              <button onClick={closeEditModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-sm text-slate-700">
+                Servicio (catálogo)
+                <select
+                  value={editForm.service_catalog}
+                  onChange={e => handleEditChange('service_catalog', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                >
+                  <option value="">Sin catálogo</option>
+                  {catalogs.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Servicio sin IVA
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.service_amount}
+                  onChange={e => handleEditChange('service_amount', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Factura
+                <input
+                  type="text"
+                  value={editForm.factura}
+                  onChange={e => handleEditChange('factura', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Crédito
+                <input
+                  type="text"
+                  value={editForm.credito}
+                  onChange={e => handleEditChange('credito', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Mes
+                <select
+                  value={editForm.mes}
+                  onChange={e => handleEditChange('mes', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                >
+                  <option value="">Seleccione mes</option>
+                  {MONTHS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Año
+                <input
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  value={editForm.anio}
+                  onChange={e => handleEditChange('anio', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Observaciones
+                <textarea
+                  rows={3}
+                  value={editForm.observations}
+                  onChange={e => handleEditChange('observations', e.target.value)}
+                  className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+              </label>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                onClick={closeEditModal}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                className="px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-lg hover:bg-sky-700 disabled:opacity-60 transition-colors"
+              >
+                {savingEdit ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Report Modal ── */}
       {showReport && (
