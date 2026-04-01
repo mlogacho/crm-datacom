@@ -685,22 +685,6 @@ export default function Billing() {
             Plantilla
           </button>
           <button
-            onClick={downloadExcelReport}
-            title="Descargar reporte en Excel (datos de servicios activos)"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
-          >
-            <FileDown className="w-4 h-4" />
-            Exportar Excel
-          </button>
-          <button
-            onClick={downloadPdfReport}
-            title="Descargar reporte en PDF (datos de servicios activos)"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            Exportar PDF
-          </button>
-          <button
             onClick={() => setShowReport(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
           >
@@ -712,7 +696,7 @@ export default function Billing() {
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition-colors"
           >
             <Upload className="w-4 h-4" />
-            Importar Excel / CSV
+            Migrar Excel / CSV
           </button>
         </div>
       </div>
@@ -727,7 +711,7 @@ export default function Billing() {
           label="Total con IVA" value={fmtCurrency(totalConIva)} />
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Filters + Download ── */}
       <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-[180px]">
@@ -740,22 +724,33 @@ export default function Billing() {
               className="w-full text-sm border-none outline-none text-slate-700 placeholder-slate-400 bg-transparent"
             />
           </div>
-          <select
-            value={filters.mes}
-            onChange={e => setFilters(p => ({ ...p, mes: e.target.value }))}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            <option value="">Todos los meses</option>
-            {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-          <select
-            value={filters.anio}
-            onChange={e => setFilters(p => ({ ...p, anio: e.target.value }))}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
-          >
-            <option value="">Todos los años</option>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+
+          {/* Mes label + select */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-slate-500">Mes</span>
+            <select
+              value={filters.mes}
+              onChange={e => setFilters(p => ({ ...p, mes: e.target.value }))}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="">Todos</option>
+              {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          {/* Año label + select */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-slate-500">Año</span>
+            <select
+              value={filters.anio}
+              onChange={e => setFilters(p => ({ ...p, anio: e.target.value }))}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="">Todos</option>
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
           {(filters.mes || filters.client || filters.anio !== String(CURRENT_YEAR)) && (
             <button
               onClick={() => setFilters({ mes: '', anio: String(CURRENT_YEAR), client: '' })}
@@ -764,6 +759,27 @@ export default function Billing() {
               Limpiar
             </button>
           )}
+
+          {/* Divider */}
+          <div className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
+
+          {/* Download buttons */}
+          <button
+            onClick={downloadExcelReport}
+            title="Descargar reporte Excel del período seleccionado"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            Descargar Excel
+          </button>
+          <button
+            onClick={downloadPdfReport}
+            title="Descargar reporte PDF del período seleccionado"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Descargar PDF
+          </button>
         </div>
       </div>
 
