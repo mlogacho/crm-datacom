@@ -473,14 +473,42 @@ export default function Billing() {
         body.push(['', '', '', '', '', '', '', '', '']); // separator
       });
 
-      // Totals rows
+      // ── Totals ─────────────────────────────────────────────────────────
       const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
+
+      // TOTAL RECURRENTES
       body.push(['TOTAL RECURRENTES', '',
         fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
         '', '', '', '']);
+
+      // ADICIONALES NO RECURRENTES header
+      body.push(['__ADICIONALES__', '', '', '', '', '', '', '', '']);
+
+      // Additional rows
+      const adds = reportData.additionals || [];
+      adds.forEach(add => {
+        body.push([
+          add.client_name || '',
+          add.service_label || '—',
+          fmt(add.service_amount),
+          fmt(add.iva_amount),
+          fmt(add.total),
+          '',
+          add.observations || '',
+          add.factura      || '',
+          add.credito      || '',
+        ]);
+      });
+
+      // TOTAL ADICIONALES
+      body.push(['TOTAL ADICIONALES', '',
+        fmt(reportData.add_sin_iva || 0), fmt(reportData.add_iva || 0), fmt(reportData.add_total || 0),
+        '', '', '', '']);
       body.push(['', '', '', '', '', '', '', '', '']);
+
+      // TOTAL FACTURACION
       body.push(['TOTAL FACTURACIÓN', '',
-        fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
+        fmt(reportData.total_facturacion_sin_iva), fmt(reportData.total_facturacion_iva), fmt(reportData.total_facturacion),
         '', '', '', '']);
 
       autoTable(doc, {
@@ -516,19 +544,40 @@ export default function Billing() {
         didParseCell(data) {
           const row     = data.row.raw;
           const isTotal = row[0] === 'TOTAL RECURRENTES';
+          const isAddH  = row[0] === '__ADICIONALES__';
+          const isAddT  = row[0] === 'TOTAL ADICIONALES';
           const isGrand = row[0] === 'TOTAL FACTURACIÓN';
           const isSep   = row.every(c => c === '');
-          if (isTotal || isGrand) {
+          if (isTotal || isAddT) {
             data.cell.styles.fillColor = YELLOW;
             data.cell.styles.textColor = BLACK;
             data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fontSize  = isGrand ? 9 : 8;
+            data.cell.styles.fontSize  = 8;
+          }
+          if (isGrand) {
+            data.cell.styles.fillColor = YELLOW;
+            data.cell.styles.textColor = BLACK;
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fontSize  = 9;
+          }
+          if (isAddH) {
+            data.cell.styles.fillColor = [217, 217, 217];
+            data.cell.styles.textColor = BLACK;
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fontSize  = 8;
+            data.cell.styles.halign    = 'center';
+            // Overwrite display text only in first cell
+            if (data.column.index === 0) {
+              data.cell.text = ['ADICIONALES NO RECURRENTES'];
+            } else {
+              data.cell.text = [''];
+            }
           }
           if (isSep) {
             data.cell.styles.minCellHeight = 2;
             data.cell.styles.fillColor     = WHITE;
           }
-          if (data.column.index === 0 && !isTotal && !isGrand && !isSep && row[0] !== '') {
+          if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
             data.cell.styles.fillColor = LIGHT_BLUE;
           }
         },

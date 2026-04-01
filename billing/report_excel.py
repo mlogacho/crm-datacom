@@ -38,19 +38,21 @@ def _resolve_logo():
 
 def get_report_data(mes, anio):
     """
-    Build ordered dict of client → list of service rows from ClientService.
+    Build report data from ClientService records.
 
-    Filters ClientService where status IN BILLABLE_STATUSES.
-    Optionally filters by the service being active during the requested month/year.
+    Recurring rows  — services with agreed_price > 0 (MRC).
+    Additional rows — services with nrc > 0 (NRC, one-time charges).
 
     Returns
     -------
-    OrderedDict: { client_name: {'records': [...], 'total': Decimal} }
-    Each record has: service_label, service_amount, iva_amount, total,
-                     observations, factura, credito
+    dict:
+        'clients':     OrderedDict { client_pk: {name, records, total} }
+        'additionals': list of {client_name, service_label, service_amount,
+                                iva_amount, total, observations, factura, credito}
     """
     import calendar
     from datetime import date
+    from django.db.models import Q
     from services.models import ClientService
 
     qs = (
@@ -60,57 +62,58 @@ def get_report_data(mes, anio):
         .order_by('client__name', 'service__name', 'id')
     )
 
-    # Filter by month/year period if provided
     if mes and anio:
-        last_day = calendar.monthrange(anio, mes)[1]
+        last_day     = calendar.monthrange(anio, mes)[1]
         period_start = date(anio, mes, 1)
         period_end   = date(anio, mes, last_day)
         qs = qs.filter(start_date__lte=period_end).filter(
-            # end_date is null (open-ended) OR end_date >= start of month
-            end_date__isnull=True
-        ) | qs.filter(
-            status__in=BILLABLE_STATUSES,
-            client__is_active=True,
-            start_date__lte=period_end,
-            end_date__gte=period_start,
-        )
-        # Simpler: just filter start_date <= period_end
-        qs = (
-            ClientService.objects
-            .select_related('client', 'service')
-            .filter(status__in=BILLABLE_STATUSES, client__is_active=True)
-            .filter(start_date__lte=period_end)
-            .filter(
-                __import__('django.db.models', fromlist=['Q']).Q(end_date__isnull=True) |
-                __import__('django.db.models', fromlist=['Q']).Q(end_date__gte=period_start)
-            )
-            .order_by('client__name', 'service__name', 'id')
+            Q(end_date__isnull=True) | Q(end_date__gte=period_start)
         )
 
     clients_map = OrderedDict()
-    for cs in qs:
-        key = cs.client_id
-        if key not in clients_map:
-            clients_map[key] = {
-                'name':    cs.client.name,
-                'records': [],
-                'total':   Decimal('0'),
-            }
-        amount = Decimal(str(cs.agreed_price or 0))
-        iva    = round(amount * Decimal('0.15'), 2)
-        total  = round(amount + iva, 2)
-        clients_map[key]['records'].append({
-            'service_label':   cs.service.name if cs.service else '',
-            'service_amount':  float(amount),
-            'iva_amount':      float(iva),
-            'total':           float(total),
-            'observations':    cs.notes or '',
-            'factura':         '',
-            'credito':         '',
-        })
-        clients_map[key]['total'] += amount
+    additionals = []
 
-    return clients_map
+    for cs in qs:
+        # ── Recurring (MRC) ──────────────────────────────────────────────
+        amount = Decimal(str(cs.agreed_price or 0))
+        if amount > 0:
+            key = cs.client_id
+            if key not in clients_map:
+                clients_map[key] = {
+                    'name':    cs.client.name,
+                    'records': [],
+                    'total':   Decimal('0'),
+                }
+            iva   = round(amount * Decimal('0.15'), 2)
+            total = round(amount + iva, 2)
+            clients_map[key]['records'].append({
+                'service_label':  cs.service.name if cs.service else '',
+                'service_amount': float(amount),
+                'iva_amount':     float(iva),
+                'total':          float(total),
+                'observations':   cs.notes or '',
+                'factura':        '',
+                'credito':        '',
+            })
+            clients_map[key]['total'] += amount
+
+        # ── Non-recurring (NRC) ──────────────────────────────────────────
+        nrc_amount = Decimal(str(cs.nrc or 0))
+        if nrc_amount > 0:
+            nrc_iva   = round(nrc_amount * Decimal('0.15'), 2)
+            nrc_total = round(nrc_amount + nrc_iva, 2)
+            additionals.append({
+                'client_name':    cs.client.name,
+                'service_label':  cs.service.name if cs.service else '',
+                'service_amount': float(nrc_amount),
+                'iva_amount':     float(nrc_iva),
+                'total':          float(nrc_total),
+                'observations':   cs.notes or '',
+                'factura':        '',
+                'credito':        '',
+            })
+
+    return {'clients': clients_map, 'additionals': additionals}
 
 
 def _thin_border():
@@ -138,7 +141,9 @@ def generate_billing_excel(mes, anio):
     (io.BytesIO, str)  — file buffer and month label for file naming.
     """
     mes_label   = MONTH_NAMES.get(mes, '') if mes else ''
-    clients_map = get_report_data(mes, anio)
+    result      = get_report_data(mes, anio)
+    clients_map = result['clients']
+    additionals = result['additionals']
 
     # ── Workbook / sheet ──────────────────────────────────────────────────
     wb = Workbook()
@@ -278,29 +283,89 @@ def generate_billing_excel(mes, anio):
         row_cursor += 1
 
     # ── Totals ────────────────────────────────────────────────────────────
-    total_sin_iva = sum(rec['service_amount'] for cd in clients_map.values() for rec in cd['records'])
-    total_iva     = sum(rec['iva_amount']     for cd in clients_map.values() for rec in cd['records'])
-    total_con_iva = sum(rec['total']          for cd in clients_map.values() for rec in cd['records'])
+    rec_sin_iva = sum(rec['service_amount'] for cd in clients_map.values() for rec in cd['records'])
+    rec_iva     = sum(rec['iva_amount']     for cd in clients_map.values() for rec in cd['records'])
+    rec_total   = sum(rec['total']          for cd in clients_map.values() for rec in cd['records'])
+
+    add_sin_iva = sum(a['service_amount'] for a in additionals)
+    add_iva     = sum(a['iva_amount']     for a in additionals)
+    add_total   = sum(a['total']          for a in additionals)
+
+    grand_sin_iva = rec_sin_iva + add_sin_iva
+    grand_iva     = rec_iva     + add_iva
+    grand_total   = rec_total   + add_total
 
     YELLOW  = PatternFill('solid', fgColor='FFFF00')
+    LT_GREY = PatternFill('solid', fgColor='D9D9D9')
     TOTAL_F = Font(bold=True, size=12)
     GRAND_F = Font(bold=True, size=14)
 
-    def _totals_row(row, label, s_iva, iva, total, font):
+    def _totals_row(row, label, s_iva, iva, total, font, fill=None):
+        _fill = fill or YELLOW
         ws.row_dimensions[row].height = 22
         ws.merge_cells(f'A{row}:B{row}')
         lbl = ws.cell(row=row, column=1, value=label)
         lbl.font = font; lbl.alignment = LEFT
         for col in range(1, 10):
             cell = ws.cell(row=row, column=col)
-            cell.fill = YELLOW; cell.border = BDR; cell.font = font
+            cell.fill = _fill; cell.border = BDR; cell.font = font
         for col, val in [(3, s_iva), (4, iva), (5, total)]:
             m = _money_cell(ws, row, col, val)
-            m.fill = YELLOW; m.border = BDR; m.alignment = RIGHT; m.font = font
+            m.fill = _fill; m.border = BDR; m.alignment = RIGHT; m.font = font
 
-    _totals_row(row_cursor, 'TOTAL RECURRENTES', total_sin_iva, total_iva, total_con_iva, TOTAL_F)
+    # TOTAL RECURRENTES
+    _totals_row(row_cursor, 'TOTAL RECURRENTES', rec_sin_iva, rec_iva, rec_total, TOTAL_F)
+    row_cursor += 1
+
+    # ── ADICIONALES NO RECURRENTES section ──────────────────────────────
+    ws.row_dimensions[row_cursor].height = 6
+    row_cursor += 1
+
+    # Grey section header
+    ws.row_dimensions[row_cursor].height = 20
+    ws.merge_cells(f'A{row_cursor}:I{row_cursor}')
+    sec_hdr = ws.cell(row=row_cursor, column=1, value='ADICIONALES NO RECURRENTES')
+    sec_hdr.fill = LT_GREY
+    sec_hdr.font = Font(bold=True, size=11)
+    sec_hdr.alignment = Alignment(horizontal='center', vertical='center')
+    sec_hdr.border = BDR
+    for col in range(2, 10):
+        c = ws.cell(row=row_cursor, column=col)
+        c.fill = LT_GREY; c.border = BDR
+    row_cursor += 1
+
+    # Additional rows
+    for add in additionals:
+        r = row_cursor
+        ws.row_dimensions[r].height = 18
+        a_col = ws.cell(row=r, column=1, value=add['client_name'])
+        a_col.font = BOLD_F; a_col.alignment = LEFT; a_col.border = BDR
+        b_col = ws.cell(row=r, column=2, value=add['service_label'])
+        b_col.font = DATA_F; b_col.alignment = LEFT; b_col.border = BDR
+        c_col = _money_cell(ws, r, 3, add['service_amount'])
+        c_col.font = DATA_F; c_col.alignment = RIGHT; c_col.border = BDR
+        d_col = _money_cell(ws, r, 4, add['iva_amount'])
+        d_col.font = DATA_F; d_col.alignment = RIGHT; d_col.border = BDR
+        e_col = _money_cell(ws, r, 5, add['total'])
+        e_col.font = DATA_F; e_col.alignment = RIGHT; e_col.border = BDR
+        f_col = ws.cell(row=r, column=6, value='')
+        f_col.border = BDR
+        g_col = ws.cell(row=r, column=7, value=add['observations'])
+        g_col.font = DATA_F; g_col.alignment = LEFT; g_col.border = BDR
+        h_col = ws.cell(row=r, column=8, value=add['factura'])
+        h_col.font = DATA_F; h_col.alignment = CENTER; h_col.border = BDR
+        i_col = ws.cell(row=r, column=9, value=add['credito'])
+        i_col.font = DATA_F; i_col.alignment = CENTER; i_col.border = BDR
+        row_cursor += 1
+
+    # TOTAL ADICIONALES
+    ws.row_dimensions[row_cursor].height = 6
+    row_cursor += 1
+    _totals_row(row_cursor, 'TOTAL ADICIONALES', add_sin_iva, add_iva, add_total, TOTAL_F)
     row_cursor += 2
-    _totals_row(row_cursor, 'TOTAL FACTURACION',  total_sin_iva, total_iva, total_con_iva, GRAND_F)
+
+    # TOTAL FACTURACION (RECURRENTES + ADICIONALES)
+    _totals_row(row_cursor, 'TOTAL FACTURACION', grand_sin_iva, grand_iva, grand_total, GRAND_F)
 
     # ── Print settings ────────────────────────────────────────────────────
     ws.page_setup.orientation = 'landscape'

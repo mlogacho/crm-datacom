@@ -281,7 +281,9 @@ class BillingReportDataView(APIView):
 
         from .report_excel import get_report_data, MONTH_NAMES
 
-        clients_map = get_report_data(mes, anio)
+        result      = get_report_data(mes, anio)
+        clients_map = result['clients']
+        additionals = result['additionals']
 
         clients = []
         grand_sin_iva = 0.0
@@ -299,15 +301,26 @@ class BillingReportDataView(APIView):
                 'records':       cd['records'],
             })
             grand_sin_iva += client_total
-            grand_iva     += sum(r['iva_amount']    for r in cd['records'])
-            grand_total   += sum(r['total']         for r in cd['records'])
+            grand_iva     += sum(r['iva_amount'] for r in cd['records'])
+            grand_total   += sum(r['total']      for r in cd['records'])
+
+        add_sin_iva = sum(a['service_amount'] for a in additionals)
+        add_iva     = sum(a['iva_amount']     for a in additionals)
+        add_total   = sum(a['total']          for a in additionals)
 
         return Response({
-            'mes':            mes,
-            'mes_label':      MONTH_NAMES.get(mes, '') if mes else '',
-            'anio':           anio,
-            'clients':        clients,
-            'grand_sin_iva':  round(grand_sin_iva, 2),
-            'grand_iva':      round(grand_iva, 2),
-            'grand_total':    round(grand_total, 2),
+            'mes':                      mes,
+            'mes_label':                MONTH_NAMES.get(mes, '') if mes else '',
+            'anio':                     anio,
+            'clients':                  clients,
+            'grand_sin_iva':            round(grand_sin_iva, 2),
+            'grand_iva':                round(grand_iva, 2),
+            'grand_total':              round(grand_total, 2),
+            'additionals':              additionals,
+            'add_sin_iva':              round(add_sin_iva, 2),
+            'add_iva':                  round(add_iva, 2),
+            'add_total':                round(add_total, 2),
+            'total_facturacion_sin_iva': round(grand_sin_iva + add_sin_iva, 2),
+            'total_facturacion_iva':    round(grand_iva + add_iva, 2),
+            'total_facturacion':        round(grand_total + add_total, 2),
         })
