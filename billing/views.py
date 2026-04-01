@@ -246,3 +246,68 @@ class BillingReportExportView(APIView):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+class BillingReportDataView(APIView):
+    """
+    Return JSON data for the billing report built from active ClientService records.
+
+    Used by the frontend to generate the PDF client-side with jsPDF.
+
+    Query params:
+        mes    — month number 1-12 (optional)
+        anio   — 4-digit year (defaults to current year)
+    """
+
+    def get(self, request):
+        mes_str  = request.query_params.get('mes', '')
+        anio_str = request.query_params.get('anio', '')
+
+        try:
+            anio = int(anio_str) if anio_str else datetime.now().year
+            if not (1900 <= anio <= 2100):
+                raise ValueError()
+        except (ValueError, TypeError):
+            return Response({'error': 'Año inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        mes = None
+        if mes_str:
+            try:
+                mes = int(mes_str)
+                if not (1 <= mes <= 12):
+                    raise ValueError()
+            except (ValueError, TypeError):
+                return Response({'error': 'Mes inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .report_excel import get_report_data, MONTH_NAMES
+
+        clients_map = get_report_data(mes, anio)
+
+        clients = []
+        grand_sin_iva = 0.0
+        grand_iva     = 0.0
+        grand_total   = 0.0
+
+        for cd in clients_map.values():
+            client_total = float(cd['total'])
+            client_iva   = round(client_total * 0.15, 2)
+            clients.append({
+                'name':          cd['name'],
+                'total':         client_total,
+                'total_iva':     client_iva,
+                'total_con_iva': round(client_total + client_iva, 2),
+                'records':       cd['records'],
+            })
+            grand_sin_iva += client_total
+            grand_iva     += sum(r['iva_amount']    for r in cd['records'])
+            grand_total   += sum(r['total']         for r in cd['records'])
+
+        return Response({
+            'mes':            mes,
+            'mes_label':      MONTH_NAMES.get(mes, '') if mes else '',
+            'anio':           anio,
+            'clients':        clients,
+            'grand_sin_iva':  round(grand_sin_iva, 2),
+            'grand_iva':      round(grand_iva, 2),
+            'grand_total':    round(grand_total, 2),
+        })

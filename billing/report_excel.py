@@ -1,4 +1,8 @@
-"""Excel report generator for monthly billing — CONTROL FACTURAS format."""
+"""Excel report generator for monthly billing — CONTROL FACTURAS format.
+
+Data source: ClientService (status=INSTALLED) from the Clients/Services module.
+This report is independent of the BillingRecord import module.
+"""
 
 import io
 from collections import OrderedDict
@@ -9,11 +13,12 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .models import MONTH_CHOICES, BillingRecord
+from .models import MONTH_CHOICES
 
 MONTH_NAMES = dict(MONTH_CHOICES)
 
-LOGO_PATH = None  # resolved lazily below
+# Statuses that represent a billable (recurring) service
+BILLABLE_STATUSES = ('INSTALLED',)
 
 
 def _resolve_logo():
@@ -31,17 +36,91 @@ def _resolve_logo():
     return None
 
 
+def get_report_data(mes, anio):
+    """
+    Build ordered dict of client → list of service rows from ClientService.
+
+    Filters ClientService where status IN BILLABLE_STATUSES.
+    Optionally filters by the service being active during the requested month/year.
+
+    Returns
+    -------
+    OrderedDict: { client_name: {'records': [...], 'total': Decimal} }
+    Each record has: service_label, service_amount, iva_amount, total,
+                     observations, factura, credito
+    """
+    import calendar
+    from datetime import date
+    from services.models import ClientService
+
+    qs = (
+        ClientService.objects
+        .select_related('client', 'service')
+        .filter(status__in=BILLABLE_STATUSES, client__is_active=True)
+        .order_by('client__name', 'service__name', 'id')
+    )
+
+    # Filter by month/year period if provided
+    if mes and anio:
+        last_day = calendar.monthrange(anio, mes)[1]
+        period_start = date(anio, mes, 1)
+        period_end   = date(anio, mes, last_day)
+        qs = qs.filter(start_date__lte=period_end).filter(
+            # end_date is null (open-ended) OR end_date >= start of month
+            end_date__isnull=True
+        ) | qs.filter(
+            status__in=BILLABLE_STATUSES,
+            client__is_active=True,
+            start_date__lte=period_end,
+            end_date__gte=period_start,
+        )
+        # Simpler: just filter start_date <= period_end
+        qs = (
+            ClientService.objects
+            .select_related('client', 'service')
+            .filter(status__in=BILLABLE_STATUSES, client__is_active=True)
+            .filter(start_date__lte=period_end)
+            .filter(
+                __import__('django.db.models', fromlist=['Q']).Q(end_date__isnull=True) |
+                __import__('django.db.models', fromlist=['Q']).Q(end_date__gte=period_start)
+            )
+            .order_by('client__name', 'service__name', 'id')
+        )
+
+    clients_map = OrderedDict()
+    for cs in qs:
+        key = cs.client_id
+        if key not in clients_map:
+            clients_map[key] = {
+                'name':    cs.client.name,
+                'records': [],
+                'total':   Decimal('0'),
+            }
+        amount = Decimal(str(cs.agreed_price or 0))
+        iva    = round(amount * Decimal('0.15'), 2)
+        total  = round(amount + iva, 2)
+        clients_map[key]['records'].append({
+            'service_label':   cs.service.name if cs.service else '',
+            'service_amount':  float(amount),
+            'iva_amount':      float(iva),
+            'total':           float(total),
+            'observations':    cs.notes or '',
+            'factura':         '',
+            'credito':         '',
+        })
+        clients_map[key]['total'] += amount
+
+    return clients_map
+
+
 def _thin_border():
     s = Side(style='thin', color='FF000000')
     return Border(left=s, right=s, top=s, bottom=s)
 
 
-def _set_money(ws, row, col, value, extra_styles=None):
-    cell = ws.cell(row=row, column=col, value=float(value) if value else 0.0)
+def _money_cell(ws, row, col, value):
+    cell = ws.cell(row=row, column=col, value=round(float(value or 0), 2))
     cell.number_format = '#,##0.00'
-    if extra_styles:
-        for attr, val in extra_styles.items():
-            setattr(cell, attr, val)
     return cell
 
 
@@ -56,97 +135,74 @@ def generate_billing_excel(mes, anio):
 
     Returns
     -------
-    io.BytesIO  ready to stream as HTTP response.
+    (io.BytesIO, str)  — file buffer and month label for file naming.
     """
-    qs = (
-        BillingRecord.objects
-        .select_related('client', 'service_catalog')
-        .filter(anio=anio)
-    )
-    if mes:
-        qs = qs.filter(mes=mes)
-    qs = qs.order_by('client__name', 'id')
+    mes_label   = MONTH_NAMES.get(mes, '') if mes else ''
+    clients_map = get_report_data(mes, anio)
 
-    # ── Group by client (preserving order) ──────────────────────────────
-    clients_map = OrderedDict()
-    for r in qs:
-        key = r.client_id
-        if key not in clients_map:
-            clients_map[key] = {
-                'name': r.client.name,
-                'records': [],
-                'total': Decimal('0'),
-            }
-        clients_map[key]['records'].append(r)
-        clients_map[key]['total'] += r.service_amount or Decimal('0')
-
-    # ── Workbook setup ───────────────────────────────────────────────────
+    # ── Workbook / sheet ──────────────────────────────────────────────────
     wb = Workbook()
     ws = wb.active
-    mes_label = MONTH_NAMES.get(mes, '') if mes else ''
     ws.title = mes_label if mes_label else str(anio)
 
-    # Column widths  A    B     C     D     E     F     G     H     I
+    # Column widths: A    B     C     D     E     F     G     H     I
     col_widths = [29.5, 70.0, 17.5, 16.5, 16.5, 25.0, 14.5, 13.0, 13.0]
     for i, w in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     # Row heights
     ws.row_dimensions[1].height = 12
-    ws.row_dimensions[2].height = 42  # logo area
+    ws.row_dimensions[2].height = 42
     ws.row_dimensions[3].height = 12
     ws.row_dimensions[4].height = 26
     ws.row_dimensions[5].height = 8
     ws.row_dimensions[6].height = 32
 
-    # ── Logo (rows 1-3) ──────────────────────────────────────────────────
+    # ── Logo ──────────────────────────────────────────────────────────────
     logo_path = _resolve_logo()
     if logo_path:
         try:
             img = XLImage(logo_path)
-            img.width = 160
+            img.width  = 160
             img.height = 52
             ws.add_image(img, 'A1')
         except Exception:
-            pass  # logo optional — never break the report
+            pass
 
-    # ── Row 4: Title ─────────────────────────────────────────────────────
+    # ── Title row 4 ───────────────────────────────────────────────────────
     ws.merge_cells('A4:I4')
-    title = ws['A4']
-    title.value = f'FACTURACION MENSUAL RECURRENTE {anio}'
-    title.font = Font(bold=True, size=16, color='1F3864')
-    title.alignment = Alignment(horizontal='center', vertical='center')
+    title_text = f'FACTURACION MENSUAL RECURRENTE {anio}'
+    if mes_label:
+        title_text = f'FACTURACION MENSUAL RECURRENTE — {mes_label.upper()} {anio}'
+    title            = ws['A4']
+    title.value      = title_text
+    title.font       = Font(bold=True, size=16, color='1F3864')
+    title.alignment  = Alignment(horizontal='center', vertical='center')
 
-    # ── Row 6: Headers ───────────────────────────────────────────────────
-    HDR_FILL = PatternFill('solid', fgColor='1F3864')
-    HDR_FONT = Font(bold=True, color='FFFFFF', size=11)
+    # ── Header row 6 ─────────────────────────────────────────────────────
+    HDR_FILL  = PatternFill('solid', fgColor='1F3864')
+    HDR_FONT  = Font(bold=True, color='FFFFFF', size=11)
     HDR_ALIGN = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    BDR = _thin_border()
+    BDR       = _thin_border()
 
     HEADERS = [
-        'Cliente',
-        'Servicio por Cliente',
-        'Servicio sin IVA',
-        '15% IVA',
-        'TOTAL',
-        'Facturacion Total Clientes',
-        'OBSERVACIONES',
-        'FACTURA',
-        'CREDITO',
+        'Cliente', 'Servicio por Cliente', 'Servicio sin IVA',
+        '15% IVA', 'TOTAL', 'Facturacion Total Clientes',
+        'OBSERVACIONES', 'FACTURA', 'CREDITO',
     ]
     for col, h in enumerate(HEADERS, 1):
-        cell = ws.cell(row=6, column=col, value=h)
-        cell.fill = HDR_FILL
-        cell.font = HDR_FONT
+        cell           = ws.cell(row=6, column=col, value=h)
+        cell.fill      = HDR_FILL
+        cell.font      = HDR_FONT
         cell.alignment = HDR_ALIGN
-        cell.border = BDR
+        cell.border    = BDR
 
-    # ── Shared style objects ─────────────────────────────────────────────
-    RIGHT   = Alignment(horizontal='right',  vertical='center')
-    LEFT    = Alignment(horizontal='left',   vertical='center', wrap_text=True)
-    CENTER  = Alignment(horizontal='center', vertical='center')
-    DATA_F  = Font(size=11)
-    BOLD_F  = Font(bold=True, size=11)
+    # ── Shared styles ─────────────────────────────────────────────────────
+    RIGHT  = Alignment(horizontal='right',  vertical='center')
+    LEFT   = Alignment(horizontal='left',   vertical='center', wrap_text=True)
+    CENTER = Alignment(horizontal='center', vertical='center')
+    DATA_F = Font(size=11)
+    BOLD_F = Font(bold=True, size=11)
 
     # ── Data rows ─────────────────────────────────────────────────────────
     row_cursor = 7
@@ -161,122 +217,95 @@ def generate_billing_excel(mes, anio):
             r = row_cursor
             ws.row_dimensions[r].height = 18
 
-            # A: client name (first occurrence only; merged later)
+            # A: client name (first row only; merged later)
             if i == 0:
-                a = ws.cell(row=r, column=1, value=client_name)
-                a.font = BOLD_F
+                a           = ws.cell(row=r, column=1, value=client_name)
+                a.font      = BOLD_F
                 a.alignment = LEFT
 
             # B: service label
-            svc = (
-                rec.service_catalog.name
-                if rec.service_catalog
-                else (rec.service_label or '')
-            )
-            b = ws.cell(row=r, column=2, value=svc)
-            b.font = DATA_F
+            b           = ws.cell(row=r, column=2, value=rec['service_label'])
+            b.font      = DATA_F
             b.alignment = LEFT
 
-            # C-E: amounts
-            _set_money(ws, r, 3, rec.service_amount)
-            ws.cell(row=r, column=3).font = DATA_F
-            ws.cell(row=r, column=3).alignment = RIGHT
+            # C: Servicio sin IVA
+            c = _money_cell(ws, r, 3, rec['service_amount'])
+            c.font = DATA_F; c.alignment = RIGHT; c.border = BDR
 
-            _set_money(ws, r, 4, rec.iva_amount)
-            ws.cell(row=r, column=4).font = DATA_F
-            ws.cell(row=r, column=4).alignment = RIGHT
+            # D: 15% IVA
+            d = _money_cell(ws, r, 4, rec['iva_amount'])
+            d.font = DATA_F; d.alignment = RIGHT; d.border = BDR
 
-            _set_money(ws, r, 5, rec.total)
-            ws.cell(row=r, column=5).font = DATA_F
-            ws.cell(row=r, column=5).alignment = RIGHT
+            # E: Total
+            e = _money_cell(ws, r, 5, rec['total'])
+            e.font = DATA_F; e.alignment = RIGHT; e.border = BDR
 
-            # F: facturacion total cliente (first row only)
+            # F: Facturacion Total Clientes (first row only)
             if i == 0:
-                f = _set_money(ws, r, 6, client_total)
-                f.font = BOLD_F
-                f.alignment = RIGHT
+                f = _money_cell(ws, r, 6, client_total)
+                f.font = BOLD_F; f.alignment = RIGHT; f.border = BDR
 
-            # G-I: text fields
-            for col_idx, val in [
-                (7, rec.observations or ''),
-                (8, rec.factura or ''),
-                (9, rec.credito or ''),
-            ]:
-                cell = ws.cell(row=r, column=col_idx, value=val)
-                cell.font = DATA_F
-                cell.alignment = CENTER if col_idx in (8, 9) else LEFT
+            # G: Observaciones
+            g           = ws.cell(row=r, column=7, value=rec['observations'])
+            g.font      = DATA_F; g.alignment = LEFT; g.border = BDR
 
-            # Borders
-            for col in range(1, 10):
-                ws.cell(row=r, column=col).border = BDR
+            # H: Factura
+            h_           = ws.cell(row=r, column=8, value=rec['factura'])
+            h_.font      = DATA_F; h_.alignment = CENTER; h_.border = BDR
+
+            # I: Crédito
+            i_           = ws.cell(row=r, column=9, value=rec['credito'])
+            i_.font      = DATA_F; i_.alignment = CENTER; i_.border = BDR
+
+            ws.cell(row=r, column=1).border = BDR
+            ws.cell(row=r, column=2).border = BDR
 
             row_cursor += 1
 
-        # Merge column A across all service rows for this client
+        # Merge A and F across all service rows of this client
         if len(records) > 1:
             ws.merge_cells(f'A{start_row}:A{row_cursor - 1}')
             ws.cell(row=start_row, column=1).alignment = Alignment(
                 horizontal='left', vertical='center', wrap_text=True
             )
-            # Merge column F (total cliente) too
             ws.merge_cells(f'F{start_row}:F{row_cursor - 1}')
             ws.cell(row=start_row, column=6).alignment = Alignment(
                 horizontal='right', vertical='center'
             )
 
-        # Empty separator row between clients
-        ws.row_dimensions[row_cursor].height = 7
+        # Empty separator row
+        ws.row_dimensions[row_cursor].height = 6
         row_cursor += 1
 
-    # ── Grand totals ─────────────────────────────────────────────────────
-    total_sin_iva = sum(
-        float(r.service_amount or 0)
-        for cd in clients_map.values() for r in cd['records']
-    )
-    total_iva = sum(
-        float(r.iva_amount or 0)
-        for cd in clients_map.values() for r in cd['records']
-    )
-    total_con_iva = sum(
-        float(r.total or 0)
-        for cd in clients_map.values() for r in cd['records']
-    )
+    # ── Totals ────────────────────────────────────────────────────────────
+    total_sin_iva = sum(rec['service_amount'] for cd in clients_map.values() for rec in cd['records'])
+    total_iva     = sum(rec['iva_amount']     for cd in clients_map.values() for rec in cd['records'])
+    total_con_iva = sum(rec['total']          for cd in clients_map.values() for rec in cd['records'])
 
-    YELLOW = PatternFill('solid', fgColor='FFFF00')
+    YELLOW  = PatternFill('solid', fgColor='FFFF00')
     TOTAL_F = Font(bold=True, size=12)
     GRAND_F = Font(bold=True, size=14)
 
-    def _total_row(row, label, s_iva, iva, total, font):
+    def _totals_row(row, label, s_iva, iva, total, font):
         ws.row_dimensions[row].height = 22
         ws.merge_cells(f'A{row}:B{row}')
-        label_cell = ws.cell(row=row, column=1, value=label)
-        label_cell.font = font
-        label_cell.alignment = LEFT
-        label_cell.fill = YELLOW
-        label_cell.border = BDR
-
-        for col in range(2, 10):
+        lbl = ws.cell(row=row, column=1, value=label)
+        lbl.font = font; lbl.alignment = LEFT
+        for col in range(1, 10):
             cell = ws.cell(row=row, column=col)
-            cell.fill = YELLOW
-            cell.border = BDR
-            cell.font = font
-
+            cell.fill = YELLOW; cell.border = BDR; cell.font = font
         for col, val in [(3, s_iva), (4, iva), (5, total)]:
-            _set_money(ws, row, col, val)
-            ws.cell(row=row, column=col).fill = YELLOW
-            ws.cell(row=row, column=col).border = BDR
-            ws.cell(row=row, column=col).alignment = RIGHT
-            ws.cell(row=row, column=col).font = font
+            m = _money_cell(ws, row, col, val)
+            m.fill = YELLOW; m.border = BDR; m.alignment = RIGHT; m.font = font
 
-    _total_row(row_cursor, 'TOTAL RECURRENTES', total_sin_iva, total_iva, total_con_iva, TOTAL_F)
-    row_cursor += 2  # skip one row
-
-    _total_row(row_cursor, 'TOTAL FACTURACION', total_sin_iva, total_iva, total_con_iva, GRAND_F)
+    _totals_row(row_cursor, 'TOTAL RECURRENTES', total_sin_iva, total_iva, total_con_iva, TOTAL_F)
+    row_cursor += 2
+    _totals_row(row_cursor, 'TOTAL FACTURACION',  total_sin_iva, total_iva, total_con_iva, GRAND_F)
 
     # ── Print settings ────────────────────────────────────────────────────
     ws.page_setup.orientation = 'landscape'
-    ws.page_setup.fitToPage  = True
-    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToPage   = True
+    ws.page_setup.fitToWidth  = 1
     ws.page_setup.fitToHeight = 0
 
     buf = io.BytesIO()

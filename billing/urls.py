@@ -6,7 +6,10 @@ including bulk import for accounting cycles.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import InvoiceViewSet, InvoiceItemViewSet, BillingRecordViewSet, BulkCreateBillingView, BillingReportExportView
+from .views import (
+    InvoiceViewSet, InvoiceItemViewSet, BillingRecordViewSet,
+    BulkCreateBillingView, BillingReportExportView, BillingReportDataView,
+)
 
 router = DefaultRouter()
 router.register(r'invoices', InvoiceViewSet)
@@ -14,12 +17,9 @@ router.register(r'invoice-items', InvoiceItemViewSet)
 router.register(r'records', BillingRecordViewSet, basename='billing-records')
 
 urlpatterns = [
-    # Invoices and billing records API
     path('', include(router.urls)),
-
-    # Bulk billing import
     path('bulk-create/', BulkCreateBillingView.as_view(), name='billing-bulk-create'),
-
-    # Excel report export (CONTROL FACTURAS format)
+    # Report endpoints — source: active ClientService records (independent of BillingRecord)
     path('report/export/', BillingReportExportView.as_view(), name='billing-report-export'),
+    path('report/data/',   BillingReportDataView.as_view(),   name='billing-report-data'),
 ]

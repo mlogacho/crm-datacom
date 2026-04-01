@@ -392,7 +392,6 @@ export default function Billing() {
     const params = new URLSearchParams();
     if (filters.mes)  params.set('mes',  filters.mes);
     if (filters.anio) params.set('anio', filters.anio);
-    // Trigger file download via hidden anchor
     const url = `/api/billing/report/export/?${params.toString()}`;
     const a = document.createElement('a');
     a.href = url;
@@ -402,36 +401,49 @@ export default function Billing() {
     document.body.removeChild(a);
   };
 
-  // ── PDF report export (client-side jsPDF) ───────────────────────────────
+  // ── PDF report export (client-side jsPDF, data from backend ClientService) ───
 
-  const downloadPdfReport = () => {
-    // ── Colour constants matching the Excel format ──
-    const NAVY        = [31, 56, 100];   // #1F3864
+  const downloadPdfReport = async () => {
+    const NAVY        = [31, 56, 100];
     const WHITE       = [255, 255, 255];
-    const YELLOW      = [255, 255, 0];   // totals row
-    const LIGHT_BLUE  = [217, 225, 242]; // client name background
+    const YELLOW      = [255, 255, 0];
+    const LIGHT_BLUE  = [217, 225, 242];
     const BLACK       = [0, 0, 0];
+
+    // Fetch data from backend (ClientService source)
+    const params = new URLSearchParams();
+    if (filters.mes)  params.set('mes',  filters.mes);
+    if (filters.anio) params.set('anio', filters.anio);
+
+    let reportData;
+    try {
+      const res = await axios.get(`/api/billing/report/data/?${params.toString()}`);
+      reportData = res.data;
+    } catch (err) {
+      alert('Error al obtener datos del reporte: ' + (err.response?.data?.error || err.message));
+      return;
+    }
+
+    if (!reportData.clients || reportData.clients.length === 0) {
+      alert('No hay servicios activos para generar el reporte.');
+      return;
+    }
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
-    // ── Logo ────────────────────────────────────────────────────────────
     const logoImg = new window.Image();
     logoImg.src = '/datacom_logo.png';
 
     const _buildPdf = () => {
-      const mesLabel  = filters.mes  ? getMesLabel(Number(filters.mes))  : '';
-      const yearLabel = filters.anio || String(CURRENT_YEAR);
+      const mesLabel  = reportData.mes_label || '';
+      const yearLabel = String(reportData.anio);
       const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
       const subtitle  = mesLabel ? `Período: ${mesLabel} ${yearLabel}` : `Año: ${yearLabel}`;
 
       let startY = 14;
 
-      // Logo
-      try {
-        doc.addImage(logoImg, 'PNG', 10, 6, 38, 14);
-      } catch (_) { /* logo optional */ }
+      try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 14); } catch (_) {}
 
-      // Title
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(...NAVY);
@@ -442,52 +454,35 @@ export default function Billing() {
       doc.text(subtitle, doc.internal.pageSize.width / 2, startY, { align: 'center' });
       startY += 5;
 
-      // ── Build table body ────────────────────────────────────────────
+      // Build table body from reportData.clients
       const body = [];
-
-      groupedRecords.forEach(g => {
-        const ftc = g.facturacion_total_cliente;
-        g.rows.forEach((r, idx) => {
-          const row = [
-            idx === 0 ? g.client_name : '',          // A: Cliente
-            r.service_name || r.service_label || '—', // B: Servicio
-            fmtCurrency(r.service_amount),             // C: sin IVA
-            fmtCurrency(r.iva_amount),                 // D: 15% IVA
-            fmtCurrency(r.total),                      // E: Total
-            idx === 0 ? fmtCurrency(ftc) : '',        // F: Fact. Total Cliente
-            r.observations || '',                      // G: Observaciones
-            r.factura      || '',                      // H: Factura
-            r.credito      || '',                      // I: Crédito
-          ];
-          body.push(row);
+      reportData.clients.forEach(client => {
+        client.records.forEach((rec, idx) => {
+          body.push([
+            idx === 0 ? client.name : '',
+            rec.service_label || '—',
+            `$${Number(rec.service_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+            `$${Number(rec.iva_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+            `$${Number(rec.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+            idx === 0 ? `$${Number(client.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}` : '',
+            rec.observations || '',
+            rec.factura      || '',
+            rec.credito      || '',
+          ]);
         });
-        // empty separator
-        body.push(['', '', '', '', '', '', '', '', '']);
+        body.push(['', '', '', '', '', '', '', '', '']); // separator
       });
 
-      // Totals
-      const clientMonthMap = new Map();
-      records.forEach(r => {
-        const key = `${r.client}_${r.mes}_${r.anio}`;
-        clientMonthMap.set(key, parseFloat(r.facturacion_total_cliente || 0));
-      });
-      const grandSinIva  = Array.from(clientMonthMap.values()).reduce((a, b) => a + b, 0);
-      const grandIva     = grandSinIva * 0.15;
-      const grandTotal   = grandSinIva * 1.15;
-
-      body.push([
-        'TOTAL RECURRENTES', '',
-        fmtCurrency(grandSinIva), fmtCurrency(grandIva), fmtCurrency(grandTotal),
-        '', '', '', '',
-      ]);
+      // Totals rows
+      const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
+      body.push(['TOTAL RECURRENTES', '',
+        fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
+        '', '', '', '']);
       body.push(['', '', '', '', '', '', '', '', '']);
-      body.push([
-        'TOTAL FACTURACIÓN', '',
-        fmtCurrency(grandSinIva), fmtCurrency(grandIva), fmtCurrency(grandTotal),
-        '', '', '', '',
-      ]);
+      body.push(['TOTAL FACTURACIÓN', '',
+        fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
+        '', '', '', '']);
 
-      // ── autoTable ──────────────────────────────────────────────────
       autoTable(doc, {
         startY,
         head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA',
@@ -519,10 +514,10 @@ export default function Billing() {
           8: { cellWidth: 22, halign: 'center' },
         },
         didParseCell(data) {
-          const row = data.row.raw;
-          const isTotal   = row[0] === 'TOTAL RECURRENTES';
-          const isGrand   = row[0] === 'TOTAL FACTURACIÓN';
-          const isSep     = row.every(c => c === '');
+          const row     = data.row.raw;
+          const isTotal = row[0] === 'TOTAL RECURRENTES';
+          const isGrand = row[0] === 'TOTAL FACTURACIÓN';
+          const isSep   = row.every(c => c === '');
           if (isTotal || isGrand) {
             data.cell.styles.fillColor = YELLOW;
             data.cell.styles.textColor = BLACK;
@@ -531,9 +526,8 @@ export default function Billing() {
           }
           if (isSep) {
             data.cell.styles.minCellHeight = 2;
-            data.cell.styles.fillColor = WHITE;
+            data.cell.styles.fillColor     = WHITE;
           }
-          // Client name cells — light blue background
           if (data.column.index === 0 && !isTotal && !isGrand && !isSep && row[0] !== '') {
             data.cell.styles.fillColor = LIGHT_BLUE;
           }
@@ -551,7 +545,7 @@ export default function Billing() {
       _buildPdf();
     } else {
       logoImg.onload  = _buildPdf;
-      logoImg.onerror = _buildPdf; // proceed without logo if it fails
+      logoImg.onerror = _buildPdf;
     }
   };
 
@@ -643,18 +637,16 @@ export default function Billing() {
           </button>
           <button
             onClick={downloadExcelReport}
-            disabled={records.length === 0}
-            title={records.length === 0 ? 'No hay registros para exportar' : 'Descargar reporte en Excel'}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Descargar reporte en Excel (datos de servicios activos)"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
           >
             <FileDown className="w-4 h-4" />
             Exportar Excel
           </button>
           <button
             onClick={downloadPdfReport}
-            disabled={records.length === 0}
-            title={records.length === 0 ? 'No hay registros para exportar' : 'Descargar reporte en PDF'}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Descargar reporte en PDF (datos de servicios activos)"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
           >
             <FileText className="w-4 h-4" />
             Exportar PDF
