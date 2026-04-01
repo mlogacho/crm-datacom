@@ -97,21 +97,28 @@ def get_report_data(mes, anio):
             })
             clients_map[key]['total'] += amount
 
-        # ── Non-recurring (NRC) ──────────────────────────────────────────
+        # ── Non-recurring (NRC) — only in the month the service started ──
         nrc_amount = Decimal(str(cs.nrc or 0))
         if nrc_amount > 0:
-            nrc_iva   = round(nrc_amount * Decimal('0.15'), 2)
-            nrc_total = round(nrc_amount + nrc_iva, 2)
-            additionals.append({
-                'client_name':    cs.client.name,
-                'service_label':  cs.service.name if cs.service else '',
-                'service_amount': float(nrc_amount),
-                'iva_amount':     float(nrc_iva),
-                'total':          float(nrc_total),
-                'observations':   cs.notes or '',
-                'factura':        '',
-                'credito':        '',
-            })
+            # NRC is a one-time charge: include only if start_date falls within the
+            # selected month (or always when no month filter is applied).
+            include_nrc = True
+            if mes and anio:
+                sd = cs.start_date
+                include_nrc = (sd is not None and sd.year == anio and sd.month == mes)
+            if include_nrc:
+                nrc_iva   = round(nrc_amount * Decimal('0.15'), 2)
+                nrc_total = round(nrc_amount + nrc_iva, 2)
+                additionals.append({
+                    'client_name':    cs.client.name,
+                    'service_label':  cs.service.name if cs.service else '',
+                    'service_amount': float(nrc_amount),
+                    'iva_amount':     float(nrc_iva),
+                    'total':          float(nrc_total),
+                    'observations':   cs.notes or '',
+                    'factura':        '',
+                    'credito':        '',
+                })
 
     return {'clients': clients_map, 'additionals': additionals}
 
