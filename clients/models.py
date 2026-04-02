@@ -116,6 +116,9 @@ class Client(models.Model):
     city = models.CharField(max_length=100, verbose_name="Ciudad", blank=True, null=True)
     segment = models.CharField(max_length=100, verbose_name="Segmento", blank=True, null=True)
     service_location = models.CharField(max_length=255, verbose_name="Ubicación del Servicio", blank=True, null=True)
+    detail = models.TextField(verbose_name="Detalle", blank=True, null=True)
+    business_status = models.CharField(max_length=100, verbose_name="Estado del Negocio", blank=True, null=True)
+    observation = models.TextField(verbose_name="Observación", blank=True, null=True)
     account_manager = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

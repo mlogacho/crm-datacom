@@ -42,7 +42,8 @@ class ClientSerializer(serializers.ModelSerializer):
             'id', 'name', 'legal_name', 'tax_id', 'classification',
             'prospect_status', 'active_status', 'email', 'phone',
             'address', 'client_type_new', 'region', 'city',
-            'segment', 'service_location', 'account_manager', 'is_active', 'created_at',
+            'segment', 'service_location', 'detail', 'business_status',
+            'observation', 'account_manager', 'is_active', 'created_at',
             'updated_at', 'contacts', 'status_history', 'assigned_services',
             'total_services_count', 'total_mrc', 'total_nrc', 'account_manager_name'
         ]

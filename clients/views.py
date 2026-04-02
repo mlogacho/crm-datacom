@@ -324,6 +324,9 @@ class ImportClientsView(APIView):
                 classification = 'ACTIVE' if 'ACTIVO' in classification_str else 'PROSPECT'
                 account_manager_text = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])
                 account_manager = resolve_account_manager_user(account_manager_text)
+                detail = get_col(row, ['DETALLE', 'DETALLES'])
+                business_status_text = get_col(row, ['ESTADO DEL NEGOCIO', 'ESTADO NEGOCIO', 'ESTADO'])
+                observation = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
                 
                 # We need tax_id and email. Will use dummy if empty.
                 tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"[:50]
@@ -345,6 +348,9 @@ class ImportClientsView(APIView):
                         city=city,
                         segment=segment,
                         service_location=service_location,
+                        detail=detail,
+                        business_status=business_status_text,
+                        observation=observation,
                         classification=classification,
                         account_manager=account_manager,
                         # client_type is removed
@@ -359,6 +365,9 @@ class ImportClientsView(APIView):
                     if not client.city and city: client.city = city; changed = True
                     if not client.segment and segment: client.segment = segment; changed = True
                     if not client.service_location and service_location: client.service_location = service_location; changed = True
+                    if not client.detail and detail: client.detail = detail; changed = True
+                    if not client.business_status and business_status_text: client.business_status = business_status_text; changed = True
+                    if not client.observation and observation: client.observation = observation; changed = True
                     if classification_str and client.classification != classification: client.classification = classification; changed = True
                     if not client.account_manager and account_manager: client.account_manager = account_manager; changed = True
                     if changed: client.save()
