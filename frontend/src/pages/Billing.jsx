@@ -574,15 +574,6 @@ export default function Billing() {
         }
       },
       margin: { left: 8, right: 8, top: 28 },
-      willDrawPage(data) {
-        // Logo esquina superior izquierda - se dibuja antes del contenido
-        doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22);
-        // Titulo centrado
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
-        doc.setTextColor(0, 30, 65);
-        doc.text(title, pageW / 2, 24, { align: 'center' });
-      },
     });
 
     // ── Summary: per-client totals ─────────────────────────────────────
@@ -606,6 +597,19 @@ export default function Billing() {
     });
 
     const mesLabel = reportData.mes_label || '';
+
+    // ── Añadir logo y titulo en TODAS las paginas (post-render) ───────────
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(0, 30, 65);
+      doc.text(title, pageW / 2, 24, { align: 'center' });
+    }
+    doc.setPage(totalPages); // volver a la ultima para guardar en orden
+
     const filename = mesLabel
       ? `Facturacion_${mesLabel}_${yearLabel}.pdf`
       : `Facturacion_${yearLabel}.pdf`;
