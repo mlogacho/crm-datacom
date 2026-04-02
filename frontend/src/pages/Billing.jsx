@@ -404,10 +404,12 @@ export default function Billing() {
   // ── PDF report export (client-side jsPDF, data from backend ClientService) ───
 
   const downloadPdfReport = async () => {
-    const NAVY        = [31, 56, 100];
+    // Brand colors: Azul Datacom #001e41, Celeste #00d4ea, Gris #E8E8E8
+    const AZUL_DC     = [0, 30, 65];
     const WHITE       = [255, 255, 255];
     const YELLOW      = [255, 255, 0];
     const BLACK       = [0, 0, 0];
+    const GRIS        = [232, 232, 232];
 
     // Fetch data from backend (ClientService source)
     const params = new URLSearchParams();
@@ -436,10 +438,10 @@ export default function Billing() {
       const resp = await fetch('/datacom_logo.png');
       if (resp.ok) {
         const blob = await resp.blob();
-        logoDataUri = await new Promise(r => {
+        logoDataUri = await new Promise((resolve) => {
           const reader = new FileReader();
-          reader.onload = () => r(reader.result);
-          reader.onerror = () => r(null);
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
           reader.readAsDataURL(blob);
         });
       }
@@ -449,29 +451,30 @@ export default function Billing() {
     const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
     const pageW     = doc.internal.pageSize.width;
 
-    let startY = 14;
+    let startY = 18;
 
     // Dual logos (left and right)
     if (logoDataUri) {
       try {
-        doc.addImage(logoDataUri, 'PNG', 10, 4, 38, 15);
-        doc.addImage(logoDataUri, 'PNG', pageW - 48, 4, 38, 15);
+        doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
+        doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
       } catch (_) {}
     }
 
+    // Title — Arial 12 bold, Azul Datacom
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(...NAVY);
+    doc.setFontSize(12);
+    doc.setTextColor(...AZUL_DC);
     doc.text(title, pageW / 2, startY, { align: 'center' });
-    startY += 8;
+    startY += 6;
 
-    // Build table body from reportData.clients
+    // Build table body
     const body = [];
     reportData.clients.forEach(client => {
       client.records.forEach((rec, idx) => {
         body.push([
           idx === 0 ? client.name : '',
-          rec.service_label || '—',
+          rec.service_label || '',
           `$${Number(rec.service_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
           `$${Number(rec.iva_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
           `$${Number(rec.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
@@ -484,7 +487,6 @@ export default function Billing() {
       body.push(['', '', '', '', '', '', '', '', '']); // separator
     });
 
-    // ── Totals ─────────────────────────────────────────────────────────
     const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
 
     // TOTAL RECURRENTES
@@ -500,7 +502,7 @@ export default function Billing() {
     adds.forEach(add => {
       body.push([
         add.client_name || '',
-        add.service_label || '—',
+        add.service_label || '',
         fmt(add.service_amount),
         fmt(add.iva_amount),
         fmt(add.total),
@@ -528,14 +530,16 @@ export default function Billing() {
               'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
       body,
       styles: {
+        font: 'helvetica',
         fontSize: 7,
         cellPadding: 1.5,
-        lineColor: BLACK,
-        lineWidth: 0.1,
+        lineColor: [200, 200, 200],
+        lineWidth: 0.15,
         overflow: 'linebreak',
+        textColor: BLACK,
       },
       headStyles: {
-        fillColor: NAVY,
+        fillColor: AZUL_DC,
         textColor: WHITE,
         fontStyle: 'bold',
         halign: 'center',
@@ -572,7 +576,7 @@ export default function Billing() {
           data.cell.styles.fontSize  = 9;
         }
         if (isAddH) {
-          data.cell.styles.fillColor = [217, 217, 217];
+          data.cell.styles.fillColor = GRIS;
           data.cell.styles.textColor = BLACK;
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.fontSize  = 8;
@@ -586,10 +590,11 @@ export default function Billing() {
         if (isSep) {
           data.cell.styles.minCellHeight = 2;
           data.cell.styles.fillColor     = WHITE;
+          data.cell.styles.lineWidth     = 0;
         }
-        // Client name cells: navy background + white text (matching header)
+        // Client name cells: Azul Datacom background + white text
         if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
-          data.cell.styles.fillColor = NAVY;
+          data.cell.styles.fillColor = AZUL_DC;
           data.cell.styles.textColor = WHITE;
         }
       },
@@ -606,8 +611,8 @@ export default function Billing() {
       startY: doc.lastAutoTable?.finalY + 8,
       head: [[`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, '']],
       body: summaryBody,
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-      styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1 },
+      headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15 },
       columnStyles: {
         0: { cellWidth: 60, fontStyle: 'bold' },
         1: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },

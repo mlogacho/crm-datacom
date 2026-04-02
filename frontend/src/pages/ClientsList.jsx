@@ -299,11 +299,12 @@ export default function ClientsList() {
 
     // ── PDF report export (client-side jsPDF) ────────────────────────────
     const downloadPdfReport = async () => {
-        const NAVY       = [31, 56, 100];
+        // Brand colors: Azul Datacom #001e41, Celeste #00d4ea, Gris #E8E8E8
+        const AZUL_DC    = [0, 30, 65];
         const WHITE      = [255, 255, 255];
         const YELLOW     = [255, 255, 0];
         const BLACK      = [0, 0, 0];
-        const GREY       = [217, 217, 217];
+        const GRIS       = [232, 232, 232];
 
         let reportData;
         try {
@@ -326,10 +327,10 @@ export default function ClientsList() {
             const resp = await fetch('/datacom_logo.png');
             if (resp.ok) {
                 const blob = await resp.blob();
-                logoDataUri = await new Promise(r => {
+                logoDataUri = await new Promise((resolve) => {
                     const reader = new FileReader();
-                    reader.onload = () => r(reader.result);
-                    reader.onerror = () => r(null);
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = () => resolve(null);
                     reader.readAsDataURL(blob);
                 });
             }
@@ -337,21 +338,22 @@ export default function ClientsList() {
 
         const yearLabel = String(reportData.anio);
         const pageW = doc.internal.pageSize.width;
-        let startY = 14;
+        let startY = 18;
 
         // Dual logos (left and right)
         if (logoDataUri) {
             try {
-                doc.addImage(logoDataUri, 'PNG', 10, 4, 38, 15);
-                doc.addImage(logoDataUri, 'PNG', pageW - 48, 4, 38, 15);
+                doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
+                doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
             } catch (_) {}
         }
 
+        // Title — Arial 12 bold, Azul Datacom
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(16);
-        doc.setTextColor(...NAVY);
+        doc.setFontSize(12);
+        doc.setTextColor(...AZUL_DC);
         doc.text(`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, pageW / 2, startY, { align: 'center' });
-        startY += 8;
+        startY += 6;
 
         const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
         const body = [];
@@ -359,7 +361,7 @@ export default function ClientsList() {
             client.records.forEach((rec, idx) => {
                 body.push([
                     idx === 0 ? client.name : '',
-                    rec.service_label || '—',
+                    rec.service_label || '',
                     fmt(rec.service_amount), fmt(rec.iva_amount), fmt(rec.total),
                     idx === 0 ? fmt(client.total) : '',
                     rec.observations || '', rec.factura || '', rec.credito || '',
@@ -371,7 +373,7 @@ export default function ClientsList() {
         body.push(['__ADICIONALES__', '', '', '', '', '', '', '', '']);
         const adds = reportData.additionals || [];
         adds.forEach(a => {
-            body.push([a.client_name || '', a.service_label || '—', fmt(a.service_amount), fmt(a.iva_amount), fmt(a.total), '', a.observations || '', a.factura || '', a.credito || '']);
+            body.push([a.client_name || '', a.service_label || '', fmt(a.service_amount), fmt(a.iva_amount), fmt(a.total), '', a.observations || '', a.factura || '', a.credito || '']);
         });
         body.push(['TOTAL ADICIONALES', '', fmt(reportData.add_sin_iva || 0), fmt(reportData.add_iva || 0), fmt(reportData.add_total || 0), '', '', '', '']);
         body.push(['', '', '', '', '', '', '', '', '']);
@@ -381,8 +383,8 @@ export default function ClientsList() {
             startY,
             head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA', 'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
             body,
-            styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1, overflow: 'linebreak' },
-            headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15, overflow: 'linebreak', textColor: BLACK },
+            headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
             columnStyles: {
                 0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 65 },
                 2: { cellWidth: 22, halign: 'right' }, 3: { cellWidth: 20, halign: 'right' },
@@ -399,13 +401,13 @@ export default function ClientsList() {
                 if (isTotal || isAddT) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; }
                 if (isGrand) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; }
                 if (isAddH) {
-                    data.cell.styles.fillColor = GREY; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; data.cell.styles.halign = 'center';
+                    data.cell.styles.fillColor = GRIS; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; data.cell.styles.halign = 'center';
                     data.cell.text = data.column.index === 0 ? ['ADICIONALES NO RECURRENTES'] : [''];
                 }
-                if (isSep) { data.cell.styles.minCellHeight = 2; data.cell.styles.fillColor = WHITE; }
-                // Client name cells: navy background + white text (matching header)
+                if (isSep) { data.cell.styles.minCellHeight = 2; data.cell.styles.fillColor = WHITE; data.cell.styles.lineWidth = 0; }
+                // Client name cells: Azul Datacom background + white text
                 if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
-                    data.cell.styles.fillColor = NAVY;
+                    data.cell.styles.fillColor = AZUL_DC;
                     data.cell.styles.textColor = WHITE;
                 }
             },
@@ -421,8 +423,8 @@ export default function ClientsList() {
             startY: doc.lastAutoTable?.finalY + 8,
             head: [[`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, '']],
             body: summaryBody,
-            headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-            styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1 },
+            headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15 },
             columnStyles: {
                 0: { cellWidth: 60, fontStyle: 'bold' },
                 1: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },

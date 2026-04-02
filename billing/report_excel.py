@@ -193,12 +193,12 @@ def generate_billing_excel(mes, anio):
     title_text = f'FACTURACION MENSUAL RECURRENTE {anio}'
     title            = ws['A4']
     title.value      = title_text
-    title.font       = Font(bold=True, size=16, color='1F3864')
+    title.font       = Font(name='Arial', bold=True, size=12, color='001E41')
     title.alignment  = Alignment(horizontal='center', vertical='center')
 
     # ── Header row 6 ─────────────────────────────────────────────────────
-    HDR_FILL  = PatternFill('solid', fgColor='1F3864')
-    HDR_FONT  = Font(bold=True, color='FFFFFF', size=11)
+    HDR_FILL  = PatternFill('solid', fgColor='001E41')
+    HDR_FONT  = Font(name='Arial', bold=True, color='FFFFFF', size=11)
     HDR_ALIGN = Alignment(horizontal='center', vertical='center', wrap_text=True)
     BDR       = _thin_border()
 
@@ -218,10 +218,10 @@ def generate_billing_excel(mes, anio):
     RIGHT    = Alignment(horizontal='right',  vertical='center')
     LEFT     = Alignment(horizontal='left',   vertical='center', wrap_text=True)
     CENTER   = Alignment(horizontal='center', vertical='center')
-    DATA_F   = Font(size=11)
-    BOLD_F   = Font(bold=True, size=11)
-    CLI_FILL = PatternFill('solid', fgColor='1F3864')   # navy blue for client names (same as header)
-    CLI_FONT = Font(bold=True, size=11, color='FFFFFF')  # white text on navy
+    DATA_F   = Font(name='Arial', size=11)
+    BOLD_F   = Font(name='Arial', bold=True, size=11)
+    CLI_FILL = PatternFill('solid', fgColor='001E41')   # Azul Datacom for client names
+    CLI_FONT = Font(name='Arial', bold=True, size=11, color='FFFFFF')  # white text on Azul Datacom
 
     # ── Data rows ─────────────────────────────────────────────────────────
     row_cursor = 7
@@ -317,9 +317,9 @@ def generate_billing_excel(mes, anio):
     grand_total   = rec_total   + add_total
 
     YELLOW  = PatternFill('solid', fgColor='FFFF00')
-    LT_GREY = PatternFill('solid', fgColor='D9D9D9')
-    TOTAL_F = Font(bold=True, size=12)
-    GRAND_F = Font(bold=True, size=14)
+    LT_GREY = PatternFill('solid', fgColor='E8E8E8')
+    TOTAL_F = Font(name='Arial', bold=True, size=12)
+    GRAND_F = Font(name='Arial', bold=True, size=12)
 
     def _totals_row(row, label, s_iva, iva, total, font, fill=None):
         _fill = fill or YELLOW
@@ -347,7 +347,7 @@ def generate_billing_excel(mes, anio):
     ws.merge_cells(f'A{row_cursor}:I{row_cursor}')
     sec_hdr = ws.cell(row=row_cursor, column=1, value='ADICIONALES NO RECURRENTES')
     sec_hdr.fill = LT_GREY
-    sec_hdr.font = Font(bold=True, size=11)
+    sec_hdr.font = Font(name='Arial', bold=True, size=11)
     sec_hdr.alignment = Alignment(horizontal='center', vertical='center')
     sec_hdr.border = BDR
     for col in range(2, 10):
@@ -392,7 +392,7 @@ def generate_billing_excel(mes, anio):
     # ── Summary: per-client totals ────────────────────────────────────────
     ws.merge_cells(f'A{row_cursor}:B{row_cursor}')
     sh = ws.cell(row=row_cursor, column=1, value=f'FACTURACION MENSUAL RECURRENTE {anio}')
-    sh.font = Font(bold=True, size=14, color='1F3864')
+    sh.font = Font(name='Arial', bold=True, size=12, color='001E41')
     sh.alignment = Alignment(horizontal='center', vertical='center')
     row_cursor += 1
 
