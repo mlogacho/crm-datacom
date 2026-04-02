@@ -327,16 +327,15 @@ export default function ClientsList() {
             const mesLabel  = reportData.mes_label || '';
             const yearLabel = String(reportData.anio);
             let startY = 14;
-            try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 14); } catch (_) {}
+            try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 15); } catch (_) {}
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(16);
             doc.setTextColor(...NAVY);
-            doc.text(`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, doc.internal.pageSize.width / 2, startY, { align: 'center' });
-            startY += 5;
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'normal');
-            doc.text(mesLabel ? `Período: ${mesLabel} ${yearLabel}` : `Año: ${yearLabel}`, doc.internal.pageSize.width / 2, startY, { align: 'center' });
-            startY += 5;
+            const pdfTitle = mesLabel
+                ? `FACTURACION MENSUAL RECURRENTE — ${mesLabel.toUpperCase()} ${yearLabel}`
+                : `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
+            doc.text(pdfTitle, doc.internal.pageSize.width / 2, startY, { align: 'center' });
+            startY += 8;
 
             const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
             const body = [];
@@ -363,7 +362,7 @@ export default function ClientsList() {
 
             autoTable(doc, {
                 startY,
-                head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA', 'TOTAL', 'Fact. Total Cliente', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
+                head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA', 'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
                 body,
                 styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1, overflow: 'linebreak' },
                 headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },

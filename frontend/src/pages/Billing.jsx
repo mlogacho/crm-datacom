@@ -437,22 +437,19 @@ export default function Billing() {
     const _buildPdf = () => {
       const mesLabel  = reportData.mes_label || '';
       const yearLabel = String(reportData.anio);
-      const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
-      const subtitle  = mesLabel ? `Período: ${mesLabel} ${yearLabel}` : `Año: ${yearLabel}`;
+      const title     = mesLabel
+        ? `FACTURACION MENSUAL RECURRENTE — ${mesLabel.toUpperCase()} ${yearLabel}`
+        : `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
 
       let startY = 14;
 
-      try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 14); } catch (_) {}
+      try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 15); } catch (_) {}
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(...NAVY);
       doc.text(title, doc.internal.pageSize.width / 2, startY, { align: 'center' });
-      startY += 5;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.text(subtitle, doc.internal.pageSize.width / 2, startY, { align: 'center' });
-      startY += 5;
+      startY += 8;
 
       // Build table body from reportData.clients
       const body = [];
@@ -514,7 +511,7 @@ export default function Billing() {
       autoTable(doc, {
         startY,
         head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA',
-                'TOTAL', 'Fact. Total Cliente', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
+                'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
         body,
         styles: {
           fontSize: 7,

@@ -130,7 +130,7 @@ def _thin_border():
 
 def _money_cell(ws, row, col, value):
     cell = ws.cell(row=row, column=col, value=round(float(value or 0), 2))
-    cell.number_format = '#,##0.00'
+    cell.number_format = '$#,##0.00'
     return cell
 
 
@@ -176,7 +176,7 @@ def generate_billing_excel(mes, anio):
         try:
             img = XLImage(logo_path)
             img.width  = 160
-            img.height = 52
+            img.height = 63
             ws.add_image(img, 'A1')
         except Exception:
             pass
@@ -210,11 +210,12 @@ def generate_billing_excel(mes, anio):
         cell.border    = BDR
 
     # ── Shared styles ─────────────────────────────────────────────────────
-    RIGHT  = Alignment(horizontal='right',  vertical='center')
-    LEFT   = Alignment(horizontal='left',   vertical='center', wrap_text=True)
-    CENTER = Alignment(horizontal='center', vertical='center')
-    DATA_F = Font(size=11)
-    BOLD_F = Font(bold=True, size=11)
+    RIGHT    = Alignment(horizontal='right',  vertical='center')
+    LEFT     = Alignment(horizontal='left',   vertical='center', wrap_text=True)
+    CENTER   = Alignment(horizontal='center', vertical='center')
+    DATA_F   = Font(size=11)
+    BOLD_F   = Font(bold=True, size=11)
+    CLI_FILL = PatternFill('solid', fgColor='D9E1F2')   # light blue for client names
 
     # ── Data rows ─────────────────────────────────────────────────────────
     row_cursor = 7
@@ -234,6 +235,7 @@ def generate_billing_excel(mes, anio):
                 a           = ws.cell(row=r, column=1, value=client_name)
                 a.font      = BOLD_F
                 a.alignment = LEFT
+                a.fill      = CLI_FILL
 
             # B: service label
             b           = ws.cell(row=r, column=2, value=rec['service_label'])
@@ -273,6 +275,10 @@ def generate_billing_excel(mes, anio):
             ws.cell(row=r, column=2).border = BDR
 
             row_cursor += 1
+
+        # Apply light-blue fill to all client rows in column A
+        for rr in range(start_row, row_cursor):
+            ws.cell(row=rr, column=1).fill = CLI_FILL
 
         # Merge A and F across all service rows of this client
         if len(records) > 1:
