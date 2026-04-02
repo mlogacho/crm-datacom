@@ -319,25 +319,25 @@ export default function ClientsList() {
             return;
         }
 
-        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
         const rawLogoB64 = DATACOM_LOGO.split(',')[1];
         const titleText = `FACTURACION MENSUAL RECURRENTE ${String(reportData.anio)}`;
 
         const yearLabel = String(reportData.anio);
-        const pageW = doc.internal.pageSize.width;
-        let startY = 24;
+        const pageW = doc.internal.pageSize.width;  // 297mm
+        let startY = 28;
 
         // Pre-register image
         try {
-            doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+            doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
         } catch (e) { console.error('Logo error:', e); }
 
         // Title
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
+        doc.setFontSize(13);
         doc.setTextColor(...AZUL_DC);
-        doc.text(titleText, pageW / 2, 22, { align: 'center' });
+        doc.text(titleText, pageW / 2, 24, { align: 'center' });
 
         const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
         const body = [];
@@ -370,10 +370,10 @@ export default function ClientsList() {
             styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineWidth: 0, overflow: 'linebreak', textColor: BLACK },
             headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
             columnStyles: {
-                0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 65 },
-                2: { cellWidth: 22, halign: 'right' }, 3: { cellWidth: 20, halign: 'right' },
-                4: { cellWidth: 22, halign: 'right' }, 5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
-                6: { cellWidth: 30 }, 7: { cellWidth: 22, halign: 'center' }, 8: { cellWidth: 22, halign: 'center' },
+                0: { cellWidth: 28, fontStyle: 'bold' }, 1: { cellWidth: 55 },
+                2: { cellWidth: 18, halign: 'right' }, 3: { cellWidth: 16, halign: 'right' },
+                4: { cellWidth: 18, halign: 'right' }, 5: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },
+                6: { cellWidth: 45 }, 7: { cellWidth: 18, halign: 'center' }, 8: { cellWidth: 18, halign: 'center' },
             },
             didParseCell(data) {
                 const row = data.row.raw;
@@ -395,15 +395,15 @@ export default function ClientsList() {
                     data.cell.styles.textColor = WHITE;
                 }
             },
-            margin: { left: 8, right: 8, top: 30 },
+            margin: { left: 8, right: 8, top: 28 },
             didDrawPage() {
                 try {
-                    doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+                    doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
                 } catch (e) { console.error('Logo page error:', e); }
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(12);
+                doc.setFontSize(13);
                 doc.setTextColor(0, 30, 65);
-                doc.text(titleText, pageW / 2, 22, { align: 'center' });
+                doc.text(titleText, pageW / 2, 24, { align: 'center' });
             },
         });
 

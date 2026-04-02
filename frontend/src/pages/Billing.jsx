@@ -430,27 +430,27 @@ export default function Billing() {
       return;
     }
 
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     // Extract raw base64 for maximum jsPDF compatibility
     const rawLogoB64 = DATACOM_LOGO.split(',')[1];
 
     const yearLabel = String(reportData.anio);
     const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
-    const pageW     = doc.internal.pageSize.width;
+    const pageW     = doc.internal.pageSize.width;  // 297mm
 
-    let startY = 24;
+    let startY = 28;
 
     // Pre-register the image to avoid re-parsing on every page
     try {
-      doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+      doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
     } catch (e) { console.error('Logo addImage error:', e); }
 
-    // Title — Arial 12 bold, Azul Datacom
+    // Title — bold, Azul Datacom
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.setTextColor(...AZUL_DC);
-    doc.text(title, pageW / 2, 22, { align: 'center' });
+    doc.text(title, pageW / 2, 24, { align: 'center' });
 
     // Build table body
     const body = [];
@@ -529,15 +529,15 @@ export default function Billing() {
         fontSize: 7.5,
       },
       columnStyles: {
-        0: { cellWidth: 35, fontStyle: 'bold' },
-        1: { cellWidth: 65 },
-        2: { cellWidth: 22, halign: 'right' },
-        3: { cellWidth: 20, halign: 'right' },
-        4: { cellWidth: 22, halign: 'right' },
-        5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
-        6: { cellWidth: 30 },
-        7: { cellWidth: 22, halign: 'center' },
-        8: { cellWidth: 22, halign: 'center' },
+        0: { cellWidth: 28, fontStyle: 'bold' },
+        1: { cellWidth: 55 },
+        2: { cellWidth: 18, halign: 'right' },
+        3: { cellWidth: 16, halign: 'right' },
+        4: { cellWidth: 18, halign: 'right' },
+        5: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },
+        6: { cellWidth: 45 },
+        7: { cellWidth: 18, halign: 'center' },
+        8: { cellWidth: 18, halign: 'center' },
       },
       didParseCell(data) {
         const row     = data.row.raw;
@@ -581,17 +581,17 @@ export default function Billing() {
           data.cell.styles.textColor = WHITE;
         }
       },
-      margin: { left: 8, right: 8, top: 30 },
+      margin: { left: 8, right: 8, top: 28 },
       didDrawPage(data) {
         // Logo on every page (top-left)
         try {
-          doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+          doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
         } catch (e) { console.error('Logo page error:', e); }
         // Title on every page
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
+        doc.setFontSize(13);
         doc.setTextColor(0, 30, 65);
-        doc.text(title, pageW / 2, 22, { align: 'center' });
+        doc.text(title, pageW / 2, 24, { align: 'center' });
       },
     });
 
