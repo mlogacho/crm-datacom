@@ -416,7 +416,10 @@ export default function ClientsList() {
         const totalPages = doc.getNumberOfPages();
         for (let p = 1; p <= totalPages; p++) {
             doc.setPage(p);
-            doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22);
+            // Fondo blanco para que el PNG RGBA se vea nítido
+            doc.setFillColor(255, 255, 255);
+            doc.rect(8, 3, 55, 22, 'F');
+            doc.addImage(DATACOM_LOGO, 'PNG', 8, 3, 55, 22);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(13);
             doc.setTextColor(0, 30, 65);
