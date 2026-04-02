@@ -321,21 +321,23 @@ export default function ClientsList() {
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
-        const logoDataUri = DATACOM_LOGO;
+        const rawLogoB64 = DATACOM_LOGO.split(',')[1];
+        const titleText = `FACTURACION MENSUAL RECURRENTE ${String(reportData.anio)}`;
 
         const yearLabel = String(reportData.anio);
         const pageW = doc.internal.pageSize.width;
-        let startY = 18;
+        let startY = 24;
 
-        // Logo top-left
-        try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
+        // Pre-register image
+        try {
+            doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+        } catch (e) { console.error('Logo error:', e); }
 
-        // Title — Arial 12 bold, Azul Datacom
+        // Title
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(...AZUL_DC);
-        doc.text(`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, pageW / 2, startY, { align: 'center' });
-        startY += 6;
+        doc.text(titleText, pageW / 2, 22, { align: 'center' });
 
         const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
         const body = [];
@@ -393,9 +395,15 @@ export default function ClientsList() {
                     data.cell.styles.textColor = WHITE;
                 }
             },
-            margin: { left: 8, right: 8, top: 24 },
+            margin: { left: 8, right: 8, top: 30 },
             didDrawPage() {
-                try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
+                try {
+                    doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+                } catch (e) { console.error('Logo page error:', e); }
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(12);
+                doc.setTextColor(0, 30, 65);
+                doc.text(titleText, pageW / 2, 22, { align: 'center' });
             },
         });
 

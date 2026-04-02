@@ -432,23 +432,25 @@ export default function Billing() {
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
-    const logoDataUri = DATACOM_LOGO;
+    // Extract raw base64 for maximum jsPDF compatibility
+    const rawLogoB64 = DATACOM_LOGO.split(',')[1];
 
     const yearLabel = String(reportData.anio);
     const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
     const pageW     = doc.internal.pageSize.width;
 
-    let startY = 18;
+    let startY = 24;
 
-    // Logo top-left
-    try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
+    // Pre-register the image to avoid re-parsing on every page
+    try {
+      doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+    } catch (e) { console.error('Logo addImage error:', e); }
 
     // Title — Arial 12 bold, Azul Datacom
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(...AZUL_DC);
-    doc.text(title, pageW / 2, startY, { align: 'center' });
-    startY += 6;
+    doc.text(title, pageW / 2, 22, { align: 'center' });
 
     // Build table body
     const body = [];
@@ -579,9 +581,17 @@ export default function Billing() {
           data.cell.styles.textColor = WHITE;
         }
       },
-      margin: { left: 8, right: 8, top: 24 },
-      didDrawPage() {
-        try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
+      margin: { left: 8, right: 8, top: 30 },
+      didDrawPage(data) {
+        // Logo on every page (top-left)
+        try {
+          doc.addImage(rawLogoB64, 'PNG', 10, 3, 42, 17, 'dclogo', 'FAST');
+        } catch (e) { console.error('Logo page error:', e); }
+        // Title on every page
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(0, 30, 65);
+        doc.text(title, pageW / 2, 22, { align: 'center' });
       },
     });
 
