@@ -432,8 +432,22 @@ export default function Billing() {
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    // Extract raw base64 for maximum jsPDF compatibility
-    const rawLogoB64 = DATACOM_LOGO.split(',')[1];
+    // Flatten RGBA PNG to white-background JPEG via canvas (fixes faint logo)
+    const flatLogo = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 1.0).split(',')[1]);
+      };
+      img.onerror = () => resolve(null);
+      img.src = DATACOM_LOGO;
+    });
 
     const yearLabel = String(reportData.anio);
     const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
@@ -442,9 +456,9 @@ export default function Billing() {
     let startY = 28;
 
     // Pre-register the image to avoid re-parsing on every page
-    try {
-      doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
-    } catch (e) { console.error('Logo addImage error:', e); }
+    if (flatLogo) {
+      try { doc.addImage(flatLogo, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo addImage error:', e); }
+    }
 
     // Title — bold, Azul Datacom
     doc.setFont('helvetica', 'bold');
@@ -584,9 +598,9 @@ export default function Billing() {
       margin: { left: 8, right: 8, top: 28 },
       didDrawPage(data) {
         // Logo on every page (top-left)
-        try {
-          doc.addImage(rawLogoB64, 'PNG', 8, 3, 55, 22, 'dclogo', 'FAST');
-        } catch (e) { console.error('Logo page error:', e); }
+        if (flatLogo) {
+          try { doc.addImage(flatLogo, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
+        }
         // Title on every page
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
