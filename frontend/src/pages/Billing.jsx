@@ -432,17 +432,14 @@ export default function Billing() {
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    // Logo ya es JPEG con fondo blanco (sin canal alpha)
-    const rawLogoB64 = DATACOM_LOGO.split(',')[1];
-
     const yearLabel = String(reportData.anio);
     const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
     const pageW     = doc.internal.pageSize.width;  // 297mm
 
     let startY = 28;
 
-    // Pre-registrar logo (pagina 1)
-    try { doc.addImage(rawLogoB64, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
+    // Pre-registrar logo (pagina 1) - pasar data URI completo
+    try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
 
     // Titulo
     doc.setFont('helvetica', 'bold');
@@ -581,7 +578,7 @@ export default function Billing() {
       },
       margin: { left: 8, right: 8, top: 28 },
       didDrawPage(data) {
-        try { doc.addImage(rawLogoB64, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
+        try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
         // Title on every page
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
