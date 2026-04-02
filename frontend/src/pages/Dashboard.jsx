@@ -8,6 +8,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { X, Check, FileDown, FileText } from "lucide-react";
 import { useAuth } from '../context/AuthContext';
+import { DATACOM_LOGO } from '../assets/logoBase64';
 
 export default function Dashboard() {
     const { userPermissions } = useAuth();
@@ -149,17 +150,15 @@ export default function Dashboard() {
 
     const handleExportPDF = () => {
         const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
 
-        // Header
-        doc.setFontSize(22);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(100, 116, 139);
-        doc.text("DataCom", 14, 20);
+        // Header – Logo
+        doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'datacomlogo');
 
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
         const rightText = "FOR-SGIC-SI-1.0-REPORTE DE CLIENTES";
-        const pageWidth = doc.internal.pageSize.getWidth();
         doc.text(rightText, pageWidth - 14 - doc.getTextWidth(rightText), 20);
 
         // Horizontal Line
