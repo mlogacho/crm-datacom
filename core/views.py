@@ -157,7 +157,7 @@ def get_user_permissions(request):
 
     if user.is_superuser:
         payload["role"] = "Súper Administrador"
-        payload["allowed_views"] = ["dashboard", "clients", "services", "support", "billing", "catalog", "settings"]
+        payload["allowed_views"] = ["dashboard", "clients", "services", "support", "billing", "catalog", "settings", "export_reports"]
         
     return Response(payload)
 

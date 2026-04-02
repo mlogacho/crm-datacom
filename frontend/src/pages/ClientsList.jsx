@@ -5,9 +5,11 @@ import axios from 'axios';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DATACOM_LOGO } from '../assets/logoBase64';
+import { useAuth } from '../context/AuthContext';
 
 export default function ClientsList() {
     const location = useLocation();
+    const { hasViewPermission } = useAuth();
     const [clients, setClients] = useState([]);
 
     // Filtros combinados
@@ -1153,6 +1155,7 @@ export default function ClientsList() {
                             ))}
                         </select>
                     </div>
+                    {hasViewPermission('export_reports') && (
                     <button
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
                         onClick={downloadExcelReport}
@@ -1161,6 +1164,8 @@ export default function ClientsList() {
                         <FileDown className="w-4 h-4" />
                         <span>Descargar Excel</span>
                     </button>
+                    )}
+                    {hasViewPermission('export_reports') && (
                     <button
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                         onClick={downloadPdfReport}
@@ -1169,6 +1174,7 @@ export default function ClientsList() {
                         <FileText className="w-4 h-4" />
                         <span>Descargar PDF</span>
                     </button>
+                    )}
                     <button
                         className="btn-outline flex items-center gap-2"
                         onClick={() => setIsImportModalOpen(true)}

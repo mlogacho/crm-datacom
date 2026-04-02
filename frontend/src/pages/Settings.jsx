@@ -10,7 +10,8 @@ const VIEWS_OPTIONS = [
     { id: 'support', label: 'Soporte' },
     { id: 'billing', label: 'Facturación' },
     { id: 'catalog', label: 'Catálogo de Servicios' },
-    { id: 'settings', label: 'Configuración (Super Admin / Roles)' }
+    { id: 'settings', label: 'Configuración (Super Admin / Roles)' },
+    { id: 'export_reports', label: 'Descargar Reportes (Excel / PDF)' }
 ];
 
 /**

@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { DATACOM_LOGO } from '../assets/logoBase64';
+import { useAuth } from '../context/AuthContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -84,6 +85,7 @@ function getMesLabel(num) {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Billing() {
+  const { hasViewPermission } = useAuth();
   const [records, setRecords]   = useState([]);
   const [catalogs, setCatalogs] = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -784,6 +786,7 @@ export default function Billing() {
           <div className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
 
           {/* Download buttons */}
+          {hasViewPermission('export_reports') && (
           <button
             onClick={downloadExcelReport}
             title="Descargar reporte Excel del período seleccionado"
@@ -792,6 +795,8 @@ export default function Billing() {
             <FileDown className="w-4 h-4" />
             Descargar Excel
           </button>
+          )}
+          {hasViewPermission('export_reports') && (
           <button
             onClick={downloadPdfReport}
             title="Descargar reporte PDF del período seleccionado"
@@ -800,6 +805,7 @@ export default function Billing() {
             <FileText className="w-4 h-4" />
             Descargar PDF
           </button>
+          )}
         </div>
       </div>
 

@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { DATACOM_LOGO } from '../assets/logoBase64';
 
 export default function Dashboard() {
-    const { userPermissions } = useAuth();
+    const { userPermissions, hasViewPermission } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState([
         { name: 'Total Clientes', value: '0', icon: Users, change: 'Actualizado', changeType: 'increase' },
@@ -239,12 +239,14 @@ export default function Dashboard() {
                     <h1 className="text-2xl sm:text-3xl font-bold leading-tight text-slate-900">Dashboard</h1>
                     <p className="mt-2 text-sm text-slate-600">Visión general del negocio y métricas clave.</p>
                 </div>
+                {hasViewPermission('export_reports') && (
                 <div className="mt-4 sm:mt-0">
                     <button onClick={() => setIsReportModalOpen(true)} className="btn-primary flex items-center gap-2">
                         <Activity className="w-4 h-4" />
                         <span>Generar Reporte</span>
                     </button>
                 </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
