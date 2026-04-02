@@ -4,6 +4,7 @@ import { Plus, Search, Filter, MoreVertical, Building2, Smartphone, MonitorSmart
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { DATACOM_LOGO } from '../assets/logoBase64';
 
 export default function ClientsList() {
     const location = useLocation();
@@ -320,32 +321,14 @@ export default function ClientsList() {
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
-        // Load logo as data URI for reliable embedding
-        let logoDataUri = null;
-        try {
-            const resp = await fetch('/datacom_logo.png');
-            if (resp.ok) {
-                const blob = await resp.blob();
-                logoDataUri = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.onerror = () => resolve(null);
-                    reader.readAsDataURL(blob);
-                });
-            }
-        } catch (_) {}
+        const logoDataUri = DATACOM_LOGO;
 
         const yearLabel = String(reportData.anio);
         const pageW = doc.internal.pageSize.width;
         let startY = 18;
 
-        // Dual logos (left and right)
-        if (logoDataUri) {
-            try {
-                doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
-                doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
-            } catch (_) {}
-        }
+        // Logo top-left
+        try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
 
         // Title — Arial 12 bold, Azul Datacom
         doc.setFont('helvetica', 'bold');
@@ -412,12 +395,7 @@ export default function ClientsList() {
             },
             margin: { left: 8, right: 8, top: 24 },
             didDrawPage() {
-                if (logoDataUri) {
-                    try {
-                        doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
-                        doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
-                    } catch (_) {}
-                }
+                try { doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17); } catch (_) {}
             },
         });
 
