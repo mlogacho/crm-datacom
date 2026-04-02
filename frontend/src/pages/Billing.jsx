@@ -438,10 +438,7 @@ export default function Billing() {
 
     let startY = 28;
 
-    // Pre-registrar logo (pagina 1) - pasar data URI completo
-    try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
-
-    // Titulo
+    // Titulo pagina 1 (sin logo aqui — el logo se pone en didDrawPage)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...AZUL_DC);
@@ -577,9 +574,10 @@ export default function Billing() {
         }
       },
       margin: { left: 8, right: 8, top: 28 },
-      didDrawPage(data) {
-        try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
-        // Title on every page
+      willDrawPage(data) {
+        // Logo esquina superior izquierda - se dibuja antes del contenido
+        doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22);
+        // Titulo centrado
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
         doc.setTextColor(0, 30, 65);

@@ -326,10 +326,7 @@ export default function ClientsList() {
         const pageW = doc.internal.pageSize.width;  // 297mm
         let startY = 28;
 
-        // Pre-registrar logo (pagina 1) - pasar data URI completo
-        try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
-
-        // Titulo
+        // Titulo pagina 1
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
         doc.setTextColor(...AZUL_DC);
@@ -392,8 +389,8 @@ export default function ClientsList() {
                 }
             },
             margin: { left: 8, right: 8, top: 28 },
-            didDrawPage() {
-                try { doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
+            willDrawPage() {
+                doc.addImage(DATACOM_LOGO, 'JPEG', 8, 3, 55, 22);
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(13);
                 doc.setTextColor(0, 30, 65);
