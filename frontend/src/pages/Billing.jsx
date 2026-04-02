@@ -533,8 +533,7 @@ export default function Billing() {
         font: 'helvetica',
         fontSize: 7,
         cellPadding: 1.5,
-        lineColor: [200, 200, 200],
-        lineWidth: 0.15,
+        lineWidth: 0,
         overflow: 'linebreak',
         textColor: BLACK,
       },
@@ -612,7 +611,7 @@ export default function Billing() {
       head: [[`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, '']],
       body: summaryBody,
       headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15 },
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineWidth: 0 },
       columnStyles: {
         0: { cellWidth: 60, fontStyle: 'bold' },
         1: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },

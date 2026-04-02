@@ -383,7 +383,7 @@ export default function ClientsList() {
             startY,
             head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA', 'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
             body,
-            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15, overflow: 'linebreak', textColor: BLACK },
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineWidth: 0, overflow: 'linebreak', textColor: BLACK },
             headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
             columnStyles: {
                 0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 65 },
@@ -424,7 +424,7 @@ export default function ClientsList() {
             head: [[`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, '']],
             body: summaryBody,
             headStyles: { fillColor: AZUL_DC, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.15 },
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineWidth: 0 },
             columnStyles: {
                 0: { cellWidth: 60, fontStyle: 'bold' },
                 1: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
