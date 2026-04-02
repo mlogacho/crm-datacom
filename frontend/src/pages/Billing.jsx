@@ -88,7 +88,7 @@ export default function Billing() {
   const [loading, setLoading]   = useState(true);
 
   const [filters, setFilters] = useState({
-    mes: '', anio: String(CURRENT_YEAR), client: '',
+    mes: String(new Date().getMonth() + 1), anio: String(CURRENT_YEAR), client: '',
   });
 
   // Selection
@@ -407,7 +407,6 @@ export default function Billing() {
     const NAVY        = [31, 56, 100];
     const WHITE       = [255, 255, 255];
     const YELLOW      = [255, 255, 0];
-    const LIGHT_BLUE  = [217, 225, 242];
     const BLACK       = [0, 0, 0];
 
     // Fetch data from backend (ClientService source)
@@ -431,168 +430,197 @@ export default function Billing() {
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
-    const logoImg = new window.Image();
-    logoImg.src = '/datacom_logo.png';
-
-    const _buildPdf = () => {
-      const mesLabel  = reportData.mes_label || '';
-      const yearLabel = String(reportData.anio);
-      const title     = mesLabel
-        ? `FACTURACION MENSUAL RECURRENTE — ${mesLabel.toUpperCase()} ${yearLabel}`
-        : `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
-
-      let startY = 14;
-
-      try { doc.addImage(logoImg, 'PNG', 10, 6, 38, 15); } catch (_) {}
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(...NAVY);
-      doc.text(title, doc.internal.pageSize.width / 2, startY, { align: 'center' });
-      startY += 8;
-
-      // Build table body from reportData.clients
-      const body = [];
-      reportData.clients.forEach(client => {
-        client.records.forEach((rec, idx) => {
-          body.push([
-            idx === 0 ? client.name : '',
-            rec.service_label || '—',
-            `$${Number(rec.service_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
-            `$${Number(rec.iva_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
-            `$${Number(rec.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
-            idx === 0 ? `$${Number(client.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}` : '',
-            rec.observations || '',
-            rec.factura      || '',
-            rec.credito      || '',
-          ]);
+    // Load logo as data URI for reliable embedding
+    let logoDataUri = null;
+    try {
+      const resp = await fetch('/datacom_logo.png');
+      if (resp.ok) {
+        const blob = await resp.blob();
+        logoDataUri = await new Promise(r => {
+          const reader = new FileReader();
+          reader.onload = () => r(reader.result);
+          reader.onerror = () => r(null);
+          reader.readAsDataURL(blob);
         });
-        body.push(['', '', '', '', '', '', '', '', '']); // separator
-      });
+      }
+    } catch (_) {}
 
-      // ── Totals ─────────────────────────────────────────────────────────
-      const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
+    const yearLabel = String(reportData.anio);
+    const title     = `FACTURACION MENSUAL RECURRENTE ${yearLabel}`;
+    const pageW     = doc.internal.pageSize.width;
 
-      // TOTAL RECURRENTES
-      body.push(['TOTAL RECURRENTES', '',
-        fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
-        '', '', '', '']);
+    let startY = 14;
 
-      // ADICIONALES NO RECURRENTES header
-      body.push(['__ADICIONALES__', '', '', '', '', '', '', '', '']);
+    // Dual logos (left and right)
+    if (logoDataUri) {
+      try {
+        doc.addImage(logoDataUri, 'PNG', 10, 4, 38, 15);
+        doc.addImage(logoDataUri, 'PNG', pageW - 48, 4, 38, 15);
+      } catch (_) {}
+    }
 
-      // Additional rows
-      const adds = reportData.additionals || [];
-      adds.forEach(add => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...NAVY);
+    doc.text(title, pageW / 2, startY, { align: 'center' });
+    startY += 8;
+
+    // Build table body from reportData.clients
+    const body = [];
+    reportData.clients.forEach(client => {
+      client.records.forEach((rec, idx) => {
         body.push([
-          add.client_name || '',
-          add.service_label || '—',
-          fmt(add.service_amount),
-          fmt(add.iva_amount),
-          fmt(add.total),
-          '',
-          add.observations || '',
-          add.factura      || '',
-          add.credito      || '',
+          idx === 0 ? client.name : '',
+          rec.service_label || '—',
+          `$${Number(rec.service_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+          `$${Number(rec.iva_amount).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+          `$${Number(rec.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`,
+          idx === 0 ? `$${Number(client.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}` : '',
+          rec.observations || '',
+          rec.factura      || '',
+          rec.credito      || '',
         ]);
       });
+      body.push(['', '', '', '', '', '', '', '', '']); // separator
+    });
 
-      // TOTAL ADICIONALES
-      body.push(['TOTAL ADICIONALES', '',
-        fmt(reportData.add_sin_iva || 0), fmt(reportData.add_iva || 0), fmt(reportData.add_total || 0),
-        '', '', '', '']);
-      body.push(['', '', '', '', '', '', '', '', '']);
+    // ── Totals ─────────────────────────────────────────────────────────
+    const fmt = n => `$${Number(n).toLocaleString('es-EC', { minimumFractionDigits: 2 })}`;
 
-      // TOTAL FACTURACION
-      body.push(['TOTAL FACTURACIÓN', '',
-        fmt(reportData.total_facturacion_sin_iva), fmt(reportData.total_facturacion_iva), fmt(reportData.total_facturacion),
-        '', '', '', '']);
+    // TOTAL RECURRENTES
+    body.push(['TOTAL RECURRENTES', '',
+      fmt(reportData.grand_sin_iva), fmt(reportData.grand_iva), fmt(reportData.grand_total),
+      '', '', '', '']);
 
-      autoTable(doc, {
-        startY,
-        head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA',
-                'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
-        body,
-        styles: {
-          fontSize: 7,
-          cellPadding: 1.5,
-          lineColor: BLACK,
-          lineWidth: 0.1,
-          overflow: 'linebreak',
-        },
-        headStyles: {
-          fillColor: NAVY,
-          textColor: WHITE,
-          fontStyle: 'bold',
-          halign: 'center',
-          fontSize: 7.5,
-        },
-        columnStyles: {
-          0: { cellWidth: 35, fontStyle: 'bold' },
-          1: { cellWidth: 65 },
-          2: { cellWidth: 22, halign: 'right' },
-          3: { cellWidth: 20, halign: 'right' },
-          4: { cellWidth: 22, halign: 'right' },
-          5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
-          6: { cellWidth: 30 },
-          7: { cellWidth: 22, halign: 'center' },
-          8: { cellWidth: 22, halign: 'center' },
-        },
-        didParseCell(data) {
-          const row     = data.row.raw;
-          const isTotal = row[0] === 'TOTAL RECURRENTES';
-          const isAddH  = row[0] === '__ADICIONALES__';
-          const isAddT  = row[0] === 'TOTAL ADICIONALES';
-          const isGrand = row[0] === 'TOTAL FACTURACIÓN';
-          const isSep   = row.every(c => c === '');
-          if (isTotal || isAddT) {
-            data.cell.styles.fillColor = YELLOW;
-            data.cell.styles.textColor = BLACK;
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fontSize  = 8;
-          }
-          if (isGrand) {
-            data.cell.styles.fillColor = YELLOW;
-            data.cell.styles.textColor = BLACK;
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fontSize  = 9;
-          }
-          if (isAddH) {
-            data.cell.styles.fillColor = [217, 217, 217];
-            data.cell.styles.textColor = BLACK;
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fontSize  = 8;
-            data.cell.styles.halign    = 'center';
-            // Overwrite display text only in first cell
-            if (data.column.index === 0) {
-              data.cell.text = ['ADICIONALES NO RECURRENTES'];
-            } else {
-              data.cell.text = [''];
-            }
-          }
-          if (isSep) {
-            data.cell.styles.minCellHeight = 2;
-            data.cell.styles.fillColor     = WHITE;
-          }
-          if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
-            data.cell.styles.fillColor = LIGHT_BLUE;
-          }
-        },
-        margin: { left: 8, right: 8 },
-      });
+    // ADICIONALES NO RECURRENTES header
+    body.push(['__ADICIONALES__', '', '', '', '', '', '', '', '']);
 
-      const filename = mesLabel
-        ? `Facturacion_${mesLabel}_${yearLabel}.pdf`
-        : `Facturacion_${yearLabel}.pdf`;
-      doc.save(filename);
-    };
+    // Additional rows
+    const adds = reportData.additionals || [];
+    adds.forEach(add => {
+      body.push([
+        add.client_name || '',
+        add.service_label || '—',
+        fmt(add.service_amount),
+        fmt(add.iva_amount),
+        fmt(add.total),
+        '',
+        add.observations || '',
+        add.factura      || '',
+        add.credito      || '',
+      ]);
+    });
 
-    if (logoImg.complete) {
-      _buildPdf();
-    } else {
-      logoImg.onload  = _buildPdf;
-      logoImg.onerror = _buildPdf;
+    // TOTAL ADICIONALES
+    body.push(['TOTAL ADICIONALES', '',
+      fmt(reportData.add_sin_iva || 0), fmt(reportData.add_iva || 0), fmt(reportData.add_total || 0),
+      '', '', '', '']);
+    body.push(['', '', '', '', '', '', '', '', '']);
+
+    // TOTAL FACTURACION
+    body.push(['TOTAL FACTURACIÓN', '',
+      fmt(reportData.total_facturacion_sin_iva), fmt(reportData.total_facturacion_iva), fmt(reportData.total_facturacion),
+      '', '', '', '']);
+
+    autoTable(doc, {
+      startY,
+      head: [['Cliente', 'Servicio por Cliente', 'Servicio sin IVA', '15% IVA',
+              'TOTAL', 'Facturacion Total Clientes', 'OBSERVACIONES', 'FACTURA', 'CRÉDITO']],
+      body,
+      styles: {
+        fontSize: 7,
+        cellPadding: 1.5,
+        lineColor: BLACK,
+        lineWidth: 0.1,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: NAVY,
+        textColor: WHITE,
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 7.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 35, fontStyle: 'bold' },
+        1: { cellWidth: 65 },
+        2: { cellWidth: 22, halign: 'right' },
+        3: { cellWidth: 20, halign: 'right' },
+        4: { cellWidth: 22, halign: 'right' },
+        5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+        6: { cellWidth: 30 },
+        7: { cellWidth: 22, halign: 'center' },
+        8: { cellWidth: 22, halign: 'center' },
+      },
+      didParseCell(data) {
+        const row     = data.row.raw;
+        const isTotal = row[0] === 'TOTAL RECURRENTES';
+        const isAddH  = row[0] === '__ADICIONALES__';
+        const isAddT  = row[0] === 'TOTAL ADICIONALES';
+        const isGrand = row[0] === 'TOTAL FACTURACIÓN';
+        const isSep   = row.every(c => c === '');
+        if (isTotal || isAddT) {
+          data.cell.styles.fillColor = YELLOW;
+          data.cell.styles.textColor = BLACK;
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fontSize  = 8;
+        }
+        if (isGrand) {
+          data.cell.styles.fillColor = YELLOW;
+          data.cell.styles.textColor = BLACK;
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fontSize  = 9;
+        }
+        if (isAddH) {
+          data.cell.styles.fillColor = [217, 217, 217];
+          data.cell.styles.textColor = BLACK;
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fontSize  = 8;
+          data.cell.styles.halign    = 'center';
+          if (data.column.index === 0) {
+            data.cell.text = ['ADICIONALES NO RECURRENTES'];
+          } else {
+            data.cell.text = [''];
+          }
+        }
+        if (isSep) {
+          data.cell.styles.minCellHeight = 2;
+          data.cell.styles.fillColor     = WHITE;
+        }
+        // Client name cells: navy background + white text (matching header)
+        if (data.column.index === 0 && !isTotal && !isAddH && !isAddT && !isGrand && !isSep && row[0] !== '') {
+          data.cell.styles.fillColor = NAVY;
+          data.cell.styles.textColor = WHITE;
+        }
+      },
+      margin: { left: 8, right: 8 },
+    });
+
+    // ── Summary: per-client totals ─────────────────────────────────────
+    const summaryBody = reportData.clients.map(c => [c.name, fmt(c.total)]);
+    if (adds.length > 0) {
+      summaryBody.push(['TOTAL ADICIONALES', fmt(reportData.add_sin_iva || 0)]);
     }
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable?.finalY + 8,
+      head: [[`FACTURACION MENSUAL RECURRENTE ${yearLabel}`, '']],
+      body: summaryBody,
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
+      styles: { fontSize: 7, cellPadding: 1.5, lineColor: BLACK, lineWidth: 0.1 },
+      columnStyles: {
+        0: { cellWidth: 60, fontStyle: 'bold' },
+        1: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+      },
+      margin: { left: 8, right: 8 },
+      tableWidth: 85,
+    });
+
+    const mesLabel = reportData.mes_label || '';
+    const filename = mesLabel
+      ? `Facturacion_${mesLabel}_${yearLabel}.pdf`
+      : `Facturacion_${yearLabel}.pdf`;
+    doc.save(filename);
   };
 
   // ── Template download ────────────────────────────────────────────────────

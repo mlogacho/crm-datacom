@@ -27,7 +27,9 @@ def _resolve_logo():
 
     candidates = [
         os.path.join(os.path.dirname(__file__), '..', 'frontend', 'public', 'datacom_logo.png'),
+        os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist', 'datacom_logo.png'),
         '/var/www/crm-datacom/frontend/public/datacom_logo.png',
+        '/var/www/crm-datacom/frontend/dist/datacom_logo.png',
     ]
     for path in candidates:
         normalised = os.path.normpath(path)
@@ -178,14 +180,17 @@ def generate_billing_excel(mes, anio):
             img.width  = 160
             img.height = 63
             ws.add_image(img, 'A1')
+            # Second logo on the right
+            img2 = XLImage(logo_path)
+            img2.width  = 160
+            img2.height = 63
+            ws.add_image(img2, 'H1')
         except Exception:
             pass
 
     # ── Title row 4 ───────────────────────────────────────────────────────
     ws.merge_cells('A4:I4')
     title_text = f'FACTURACION MENSUAL RECURRENTE {anio}'
-    if mes_label:
-        title_text = f'FACTURACION MENSUAL RECURRENTE — {mes_label.upper()} {anio}'
     title            = ws['A4']
     title.value      = title_text
     title.font       = Font(bold=True, size=16, color='1F3864')
@@ -215,7 +220,8 @@ def generate_billing_excel(mes, anio):
     CENTER   = Alignment(horizontal='center', vertical='center')
     DATA_F   = Font(size=11)
     BOLD_F   = Font(bold=True, size=11)
-    CLI_FILL = PatternFill('solid', fgColor='D9E1F2')   # light blue for client names
+    CLI_FILL = PatternFill('solid', fgColor='1F3864')   # navy blue for client names (same as header)
+    CLI_FONT = Font(bold=True, size=11, color='FFFFFF')  # white text on navy
 
     # ── Data rows ─────────────────────────────────────────────────────────
     row_cursor = 7
@@ -233,7 +239,7 @@ def generate_billing_excel(mes, anio):
             # A: client name (first row only; merged later)
             if i == 0:
                 a           = ws.cell(row=r, column=1, value=client_name)
-                a.font      = BOLD_F
+                a.font      = CLI_FONT
                 a.alignment = LEFT
                 a.fill      = CLI_FILL
 
@@ -276,9 +282,11 @@ def generate_billing_excel(mes, anio):
 
             row_cursor += 1
 
-        # Apply light-blue fill to all client rows in column A
+        # Apply navy fill + white font to all client rows in column A
         for rr in range(start_row, row_cursor):
-            ws.cell(row=rr, column=1).fill = CLI_FILL
+            cell = ws.cell(row=rr, column=1)
+            cell.fill = CLI_FILL
+            cell.font = CLI_FONT
 
         # Merge A and F across all service rows of this client
         if len(records) > 1:
@@ -379,6 +387,28 @@ def generate_billing_excel(mes, anio):
 
     # TOTAL FACTURACION (RECURRENTES + ADICIONALES)
     _totals_row(row_cursor, 'TOTAL FACTURACION', grand_sin_iva, grand_iva, grand_total, GRAND_F)
+    row_cursor += 3
+
+    # ── Summary: per-client totals ────────────────────────────────────────
+    ws.merge_cells(f'A{row_cursor}:B{row_cursor}')
+    sh = ws.cell(row=row_cursor, column=1, value=f'FACTURACION MENSUAL RECURRENTE {anio}')
+    sh.font = Font(bold=True, size=14, color='1F3864')
+    sh.alignment = Alignment(horizontal='center', vertical='center')
+    row_cursor += 1
+
+    for cd in clients_map.values():
+        r = row_cursor
+        ws.cell(row=r, column=1, value=cd['name']).font = BOLD_F
+        m = _money_cell(ws, r, 2, cd['total'])
+        m.font = BOLD_F
+        row_cursor += 1
+
+    if additionals:
+        r = row_cursor
+        ws.cell(row=r, column=1, value='TOTAL ADICIONALES').font = BOLD_F
+        m = _money_cell(ws, r, 2, add_sin_iva)
+        m.font = BOLD_F
+        row_cursor += 1
 
     # ── Print settings ────────────────────────────────────────────────────
     ws.page_setup.orientation = 'landscape'
