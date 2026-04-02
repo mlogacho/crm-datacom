@@ -321,35 +321,18 @@ export default function ClientsList() {
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-        // Flatten RGBA PNG to white-background JPEG via canvas (fixes faint logo)
-        const flatLogo = await new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width  = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL('image/jpeg', 1.0).split(',')[1]);
-            };
-            img.onerror = () => resolve(null);
-            img.src = DATACOM_LOGO;
-        });
-
+        // Logo ya es JPEG con fondo blanco (sin canal alpha)
+        const rawLogoB64 = DATACOM_LOGO.split(',')[1];
         const titleText = `FACTURACION MENSUAL RECURRENTE ${String(reportData.anio)}`;
 
         const yearLabel = String(reportData.anio);
         const pageW = doc.internal.pageSize.width;  // 297mm
         let startY = 28;
 
-        // Pre-register image
-        if (flatLogo) {
-            try { doc.addImage(flatLogo, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
-        }
+        // Pre-registrar logo (pagina 1)
+        try { doc.addImage(rawLogoB64, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo error:', e); }
 
-        // Title
+        // Titulo
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
         doc.setTextColor(...AZUL_DC);
@@ -413,9 +396,7 @@ export default function ClientsList() {
             },
             margin: { left: 8, right: 8, top: 28 },
             didDrawPage() {
-                if (flatLogo) {
-                    try { doc.addImage(flatLogo, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
-                }
+                try { doc.addImage(rawLogoB64, 'JPEG', 8, 3, 55, 22, 'dclogo', 'FAST'); } catch (e) { console.error('Logo page error:', e); }
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(13);
                 doc.setTextColor(0, 30, 65);
