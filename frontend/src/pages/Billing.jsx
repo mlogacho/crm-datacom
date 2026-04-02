@@ -407,7 +407,6 @@ export default function Billing() {
     // Brand colors: Azul Datacom #001e41, Celeste #00d4ea, Gris #E8E8E8
     const AZUL_DC     = [0, 30, 65];
     const WHITE       = [255, 255, 255];
-    const YELLOW      = [255, 255, 0];
     const BLACK       = [0, 0, 0];
     const GRIS        = [232, 232, 232];
 
@@ -563,14 +562,14 @@ export default function Billing() {
         const isGrand = row[0] === 'TOTAL FACTURACIÓN';
         const isSep   = row.every(c => c === '');
         if (isTotal || isAddT) {
-          data.cell.styles.fillColor = YELLOW;
-          data.cell.styles.textColor = BLACK;
+          data.cell.styles.fillColor = WHITE;
+          data.cell.styles.textColor = AZUL_DC;
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.fontSize  = 8;
         }
         if (isGrand) {
-          data.cell.styles.fillColor = YELLOW;
-          data.cell.styles.textColor = BLACK;
+          data.cell.styles.fillColor = WHITE;
+          data.cell.styles.textColor = AZUL_DC;
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.fontSize  = 9;
         }
@@ -597,7 +596,15 @@ export default function Billing() {
           data.cell.styles.textColor = WHITE;
         }
       },
-      margin: { left: 8, right: 8 },
+      margin: { left: 8, right: 8, top: 24 },
+      didDrawPage() {
+        if (logoDataUri) {
+          try {
+            doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
+            doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
+          } catch (_) {}
+        }
+      },
     });
 
     // ── Summary: per-client totals ─────────────────────────────────────

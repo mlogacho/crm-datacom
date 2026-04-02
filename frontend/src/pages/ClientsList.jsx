@@ -302,7 +302,6 @@ export default function ClientsList() {
         // Brand colors: Azul Datacom #001e41, Celeste #00d4ea, Gris #E8E8E8
         const AZUL_DC    = [0, 30, 65];
         const WHITE      = [255, 255, 255];
-        const YELLOW     = [255, 255, 0];
         const BLACK      = [0, 0, 0];
         const GRIS       = [232, 232, 232];
 
@@ -398,8 +397,8 @@ export default function ClientsList() {
                 const isAddT  = row[0] === 'TOTAL ADICIONALES';
                 const isGrand = row[0] === 'TOTAL FACTURACIÓN';
                 const isSep   = row.every(c => c === '');
-                if (isTotal || isAddT) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; }
-                if (isGrand) { data.cell.styles.fillColor = YELLOW; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; }
+                if (isTotal || isAddT) { data.cell.styles.fillColor = WHITE; data.cell.styles.textColor = AZUL_DC; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; }
+                if (isGrand) { data.cell.styles.fillColor = WHITE; data.cell.styles.textColor = AZUL_DC; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 9; }
                 if (isAddH) {
                     data.cell.styles.fillColor = GRIS; data.cell.styles.fontStyle = 'bold'; data.cell.styles.fontSize = 8; data.cell.styles.halign = 'center';
                     data.cell.text = data.column.index === 0 ? ['ADICIONALES NO RECURRENTES'] : [''];
@@ -411,7 +410,15 @@ export default function ClientsList() {
                     data.cell.styles.textColor = WHITE;
                 }
             },
-            margin: { left: 8, right: 8 },
+            margin: { left: 8, right: 8, top: 24 },
+            didDrawPage() {
+                if (logoDataUri) {
+                    try {
+                        doc.addImage(logoDataUri, 'PNG', 10, 3, 42, 17);
+                        doc.addImage(logoDataUri, 'PNG', pageW - 52, 3, 42, 17);
+                    } catch (_) {}
+                }
+            },
         });
 
         // ── Summary: per-client totals ─────────────────────────────────

@@ -316,13 +316,13 @@ def generate_billing_excel(mes, anio):
     grand_iva     = rec_iva     + add_iva
     grand_total   = rec_total   + add_total
 
-    YELLOW  = PatternFill('solid', fgColor='FFFF00')
+    WHITE_BG = PatternFill('solid', fgColor='FFFFFF')
     LT_GREY = PatternFill('solid', fgColor='E8E8E8')
-    TOTAL_F = Font(name='Arial', bold=True, size=12)
-    GRAND_F = Font(name='Arial', bold=True, size=12)
+    TOTAL_F = Font(name='Arial', bold=True, size=12, color='001E41')
+    GRAND_F = Font(name='Arial', bold=True, size=12, color='001E41')
 
     def _totals_row(row, label, s_iva, iva, total, font, fill=None):
-        _fill = fill or YELLOW
+        _fill = fill or WHITE_BG
         ws.row_dimensions[row].height = 22
         ws.merge_cells(f'A{row}:B{row}')
         lbl = ws.cell(row=row, column=1, value=label)
