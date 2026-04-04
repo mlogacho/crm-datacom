@@ -51,6 +51,7 @@ export default function ClientsList() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [statusClient, setStatusClient] = useState(null);
@@ -1577,30 +1578,50 @@ export default function ClientsList() {
                         <form onSubmit={handleImportSubmit} className="flex flex-col flex-1 min-h-0">
                             {/* Contenido scrolleable */}
                             <div className="overflow-y-auto flex-1 p-6 space-y-5">
-                                <div className="relative group">
-                                    <div className="flex justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-8 group-hover:border-blue-400 transition-all bg-slate-50/50 group-hover:bg-blue-50/30">
-                                        <div className="text-center">
-                                            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4 border border-blue-100">
-                                                <Upload className="h-6 w-6 text-blue-500" />
-                                            </div>
-                                            <div className="flex text-sm leading-6 text-slate-600 justify-center">
-                                                <label htmlFor="file-upload" className="relative cursor-pointer font-bold text-blue-600 focus-within:outline-none hover:text-blue-700">
-                                                    <span>Arrastra tu archivo aquí</span>
-                                                    <span className="font-normal text-slate-500 ml-1">o haz clic para seleccionar</span>
-                                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" accept=".csv,.xlsx,.xls" onChange={(e) => setImportFile(e.target.files[0])} />
-                                                </label>
-                                            </div>
-                                            <p className="text-xs text-slate-400 mt-2">
-                                                Formatos aceptados: .xlsx · .xls · .csv
-                                            </p>
-                                            {importFile && (
-                                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-sm font-medium animate-pulse">
-                                                    <FileText className="w-4 h-4" />
-                                                    {importFile.name}
-                                                </div>
-                                            )}
+                                <div
+                                    className={`relative rounded-xl border-2 border-dashed px-6 py-8 transition-all cursor-pointer
+                                        ${isDragging
+                                            ? 'border-blue-500 bg-blue-50/60 scale-[1.01]'
+                                            : 'border-slate-200 bg-slate-50/50 hover:border-blue-400 hover:bg-blue-50/30'
+                                        }`}
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        setIsDragging(false);
+                                        const file = e.dataTransfer.files[0];
+                                        if (file) setImportFile(file);
+                                    }}
+                                    onClick={() => document.getElementById('file-upload').click()}
+                                >
+                                    <div className="text-center">
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border transition-all
+                                            ${isDragging ? 'bg-blue-100 border-blue-300' : 'bg-blue-50 border-blue-100'}`}>
+                                            <Upload className={`h-6 w-6 transition-all ${isDragging ? 'text-blue-600 scale-110' : 'text-blue-500'}`} />
                                         </div>
+                                        <div className="flex text-sm leading-6 text-slate-600 justify-center">
+                                            <span className="font-bold text-blue-600">Arrastra tu archivo aquí</span>
+                                            <span className="font-normal text-slate-500 ml-1">o haz clic para seleccionar</span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            Formatos aceptados: .xlsx · .xls · .csv
+                                        </p>
+                                        {importFile && (
+                                            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-sm font-medium">
+                                                <FileText className="w-4 h-4" />
+                                                {importFile.name}
+                                            </div>
+                                        )}
                                     </div>
+                                    <input
+                                        id="file-upload"
+                                        name="file-upload"
+                                        type="file"
+                                        className="sr-only"
+                                        accept=".csv,.xlsx,.xls"
+                                        onChange={(e) => setImportFile(e.target.files[0])}
+                                    />
                                 </div>
 
                                 <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
