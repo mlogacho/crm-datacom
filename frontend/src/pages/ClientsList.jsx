@@ -1551,11 +1551,12 @@ export default function ClientsList() {
 
             {/* Modal de Importación CSV */}
             {isImportModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
 
-                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up">
-                        <div className="px-6 py-5 border-b border-slate-200 bg-white flex justify-between items-center">
+                    <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-slide-up">
+                        {/* Header fijo */}
+                        <div className="px-6 py-5 border-b border-slate-200 bg-white flex justify-between items-center flex-shrink-0 rounded-t-xl">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center border border-blue-100">
                                     <FileText className="w-5 h-5 text-blue-600" />
@@ -1573,10 +1574,11 @@ export default function ClientsList() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleImportSubmit} className="p-6">
-                            <div className="mb-6">
+                        <form onSubmit={handleImportSubmit} className="flex flex-col flex-1 min-h-0">
+                            {/* Contenido scrolleable */}
+                            <div className="overflow-y-auto flex-1 p-6 space-y-5">
                                 <div className="relative group">
-                                    <div className="flex justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-10 group-hover:border-blue-400 transition-all bg-slate-50/50 group-hover:bg-blue-50/30">
+                                    <div className="flex justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-8 group-hover:border-blue-400 transition-all bg-slate-50/50 group-hover:bg-blue-50/30">
                                         <div className="text-center">
                                             <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4 border border-blue-100">
                                                 <Upload className="h-6 w-6 text-blue-500" />
@@ -1600,86 +1602,87 @@ export default function ClientsList() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="bg-slate-50/80 rounded-xl p-5 border border-slate-100 mb-6">
-                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Columnas del archivo:</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">REGION</span>
-                                        <span className="text-[11px] text-slate-500">Región geográfica</span>
+                                <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Columnas del archivo:</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">REGION</span>
+                                            <span className="text-[11px] text-slate-500">Región geográfica</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CIUDAD</span>
+                                            <span className="text-[11px] text-slate-500">Ciudad del cliente</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CLIENTE *</span>
+                                            <span className="text-[11px] text-slate-500">Nombre o razón social (requerido)</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SERVICIO</span>
+                                            <span className="text-[11px] text-slate-500">Nombre del producto</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">DETALLE</span>
+                                            <span className="text-[11px] text-slate-500">Detalle del servicio</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">UBICACIÓN DEL SERVICIO</span>
+                                            <span className="text-[11px] text-slate-500">Dirección de instalación</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SEGMENTO</span>
+                                            <span className="text-[11px] text-slate-500">Estratificación comercial</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">ESTADO DEL NEGOCIO</span>
+                                            <span className="text-[11px] text-slate-500">Estado comercial actual</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">GERENTE DE CUENTA</span>
+                                            <span className="text-[11px] text-slate-500">Nombre del responsable</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">NRC</span>
+                                            <span className="text-[11px] text-slate-500">Cargo no recurrente</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">MRC</span>
+                                            <span className="text-[11px] text-slate-500">Cargo mensual recurrente</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">P&S</span>
+                                            <span className="text-[11px] text-slate-500">Producto y servicio</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CLASIFICACIÓN DEL CLIENTE</span>
+                                            <span className="text-[11px] text-slate-500">Prospecto o Cliente Activo</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">OBSERVACION</span>
+                                            <span className="text-[11px] text-slate-500">Notas u observaciones</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CONTACTO</span>
+                                            <span className="text-[11px] text-slate-500">Nombre de persona contacto</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">E-MAILS</span>
+                                            <span className="text-[11px] text-slate-500">Correos electrónicos</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">TELÉFONOS</span>
+                                            <span className="text-[11px] text-slate-500">Números de contacto</span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CIUDAD</span>
-                                        <span className="text-[11px] text-slate-500">Ciudad del cliente</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CLIENTE *</span>
-                                        <span className="text-[11px] text-slate-500">Nombre o razón social (requerido)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SERVICIO</span>
-                                        <span className="text-[11px] text-slate-500">Nombre del producto</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">DETALLE</span>
-                                        <span className="text-[11px] text-slate-500">Detalle del servicio</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">UBICACIÓN DEL SERVICIO</span>
-                                        <span className="text-[11px] text-slate-500">Dirección de instalación</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">SEGMENTO</span>
-                                        <span className="text-[11px] text-slate-500">Estratificación comercial</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">ESTADO DEL NEGOCIO</span>
-                                        <span className="text-[11px] text-slate-500">Estado comercial actual</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">GERENTE DE CUENTA</span>
-                                        <span className="text-[11px] text-slate-500">Nombre del responsable</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">NRC</span>
-                                        <span className="text-[11px] text-slate-500">Cargo no recurrente</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">MRC</span>
-                                        <span className="text-[11px] text-slate-500">Cargo mensual recurrente</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">P&S</span>
-                                        <span className="text-[11px] text-slate-500">Producto y servicio</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CLASIFICACIÓN DEL CLIENTE</span>
-                                        <span className="text-[11px] text-slate-500">Prospecto o Cliente Activo</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">OBSERVACION</span>
-                                        <span className="text-[11px] text-slate-500">Notas u observaciones</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">CONTACTO</span>
-                                        <span className="text-[11px] text-slate-500">Nombre de persona contacto</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">E-MAILS</span>
-                                        <span className="text-[11px] text-slate-500">Correos electrónicos</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 shadow-sm">TELÉFONOS</span>
-                                        <span className="text-[11px] text-slate-500">Números de contacto</span>
-                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-3 italic">
+                                        Solo <strong>CLIENTE</strong> es obligatorio. Los demás campos se importan si existen en el archivo.
+                                    </p>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-4 italic">
-                                    Solo <strong>CLIENTE</strong> es obligatorio. Los demás campos se importan si existen en el archivo.
-                                </p>
                             </div>
 
-                            <div className="flex items-center justify-between pt-2">
+                            {/* Footer fijo con botones */}
+                            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-white flex-shrink-0 rounded-b-xl">
                                 <button
                                     type="button"
                                     onClick={() => {/* Lógica para descargar plantilla */}}
