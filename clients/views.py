@@ -422,6 +422,7 @@ class ImportClientsView(APIView):
                         management_type=management_type,
                         call_result=call_result,
                         notes=obs,
+                        service_location=service_location,
                         start_date=date.today()
                     )
                     created_services += 1
