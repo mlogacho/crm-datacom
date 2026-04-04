@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 ### Added
+- **Dashboard — Endpoint de métricas server-side** (`GET /api/clients/dashboard-stats/`):
+  - Agrega server-side: total clientes, servicios activos (INSTALLED), catálogo, MRC mensual y Top 5 gerentes por ingresos.
+  - Resolución de límite de paginación (`PAGE_SIZE=1000`) que ocultaba gerentes con servicios más antiguos.
+  - Respeta roles: Ventas/Gerente de Cuenta ven sólo su cartera; Super Admin ve todo.
+- **Importación CSV — Drag-and-drop real**:
+  - Eventos `onDragOver`, `onDragEnter`, `onDragLeave`, `onDrop` conectados en la zona de carga.
+  - `onDrop` lee `e.dataTransfer.files[0]` y llama `setImportFile()`.
+  - `onClick` en la zona dispara el `<input type="file">` oculto programáticamente.
+  - Feedback visual: borde azul sólido + fondo + ícono escalado al arrastrar.
+- **Importación CSV — UBICACIÓN DEL SERVICIO propagada a ClientService**:
+  - El campo se guardaba en `Client.service_location` pero no en `ClientService.service_location`.
+  - Ahora se pasa correctamente en `ClientService.objects.create()` durante el import.
 - **Gestión de Usuarios y Seguridad**:
   - Implementación de un campo "Correo Electrónico" para cada usuario del CRM (en el frontend modal de configuración).
   - Nuevo botón interactivo para mostrar/ocultar temporalmente las contraseñas en texto claro mediante un ícono (`Eye`/`EyeOff`).
@@ -23,6 +35,22 @@
 - Nuevo campo de respuesta API `account_manager_name` en serializador de clientes para mostrar nombre legible del ejecutivo.
 
 ### Fixed
+- **Dashboard — Gráfico "Ingresos por Gerente de Cuenta"**:
+  - Sólo mostraba un ejecutivo (Fausto Betancourt) porque `PAGE_SIZE=1000` devolvía únicamente los 1000 servicios más recientes (todos de importaciones recientes del CSV), dejando los servicios de otros gerentes fuera de la consulta.
+  - Resuelto moviendo el cálculo al nuevo endpoint `dashboard-stats/` que usa `annotate(Sum)` directamente en BD.
+- **Importación CSV — Error 502 Bad Gateway (WORKER TIMEOUT)**:
+  - El worker de Gunicorn moría a los 30 s al procesar archivos grandes por N+1 queries (8-10 queries/fila).
+  - Pre-carga de `Users`, `Clients`, `ServiceCatalog` y `Contacts` en dicts de memoria al inicio → `O(1)` lookup por fila.
+  - Loop de importación envuelto en `transaction.atomic()` → un solo commit para todo el archivo.
+  - Timeout de Gunicorn aumentado de 30 s a 120 s en `/etc/systemd/system/gunicorn-crm.service`.
+- **Importación CSV — Error `account_manager must be a User instance`**:
+  - El campo `Client.account_manager` se migró a `ForeignKey(User)` pero el import asignaba strings.
+  - Se usa función `resolve_account_manager_user()` que hace match por nombre completo via `Concat + icontains`.
+  - La función `get_queryset` del `ClientViewSet` fue actualizada de `account_manager__icontains` a `account_manager=user`.
+- **Modal de Importación — Contenido fuera de pantalla**:
+  - Reestructurado con `max-h-[90vh]` + `flex flex-col` en el contenedor.
+  - Header y footer con `flex-shrink-0` (siempre visibles).
+  - Contenido con `overflow-y-auto flex-1` (deslizador interno).
 - **Validaciones de Frontend/Backend**:
   - Corrección de un error HTTP 400 Validation Bad Request que impedía guardar o actualizar la información del usuario por fechas o strings vacías en los envíos vía `FormData` desde React hacia Django (`birthdate`, `civil_status`).
   - Resolución de un `IndentationError` crítico presente en `services/views.py` (`WorkOrderViewSet`).
@@ -36,6 +64,8 @@
   - Cuando no hay coincidencia unica, el proceso no falla y mantiene asignacion nula para proteger continuidad operativa.
 
 ### Changed
+- **Dashboard.jsx**: Estadísticas y gráfico ahora cargados desde `dashboard-stats/` en lugar de calcularse en cliente con datos paginados. Reducción de 3 llamadas API a 2.
+- **Importación CSV** (`clients/views.py`): Loop refactorizado con pre-carga de datos y `transaction.atomic`. Reducción estimada de queries: de ~1000 a ~200 para un archivo de 100 filas.
 - **Frontend de Clientes (`frontend/src/pages/ClientsList.jsx`)**:
   - El selector de gerente ahora envia `account_manager` como `User.id`.
   - La tabla y filtros muestran el nombre legible mediante `account_manager_name`.
