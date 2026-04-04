@@ -42,79 +42,23 @@ export default function Dashboard() {
         const fetchDashboardData = async () => {
             if (userPermissions === undefined) return;
             try {
-                // Fetch Clients
-                const clientsRes = await axios.get('/api/clients/clients/');
-                let clientsList = clientsRes.data.results ? clientsRes.data.results : clientsRes.data;
-
-                const isSuper = userPermissions?.is_superuser;
-                const role = userPermissions?.role;
-                const loggedName = userPermissions?.full_name || userPermissions?.username || '';
-
-                // Filter specifically for Managers or Sales if not superuser
-                if (!isSuper && (role === 'Gerente de Cuenta' || role === 'Ventas')) {
-                    const loggedNameLower = loggedName.toLowerCase();
-                    clientsList = clientsList.filter(c => {
-                        const managerName = (c.account_manager_name || '').toLowerCase();
-                        return managerName.includes(loggedNameLower);
-                    });
-                }
-
-                const clientsCount = clientsList.length;
-                setAllClients(clientsList);
-
-                // Fetch Services
-                const servicesRes = await axios.get('/api/services/client-services/');
-                let servicesList = servicesRes.data.results ? servicesRes.data.results : servicesRes.data;
-
-                if (!isSuper && (role === 'Gerente de Cuenta' || role === 'Ventas')) {
-                    servicesList = servicesList.filter(s => {
-                        const client = clientsList.find(c => c.id === s.client);
-                        return client != null;
-                    });
-                }
-
-                // Filter only ACTIVE services (status === 'INSTALLED')
-                const activeServices = servicesList.filter(s => s.status === 'INSTALLED');
-                const servicesCount = activeServices.length;
-
-                // Calculate Monthly Revenue from Active Services
-                const totalRevenue = activeServices.reduce((sum, service) => sum + parseFloat(service.agreed_price || 0), 0);
-                const formattedRevenue = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalRevenue);
-
-                // Fetch Catalog
-                const catalogRes = await axios.get('/api/services/catalog/');
-                let catalogList = catalogRes.data.results ? catalogRes.data.results : catalogRes.data;
-                const catalogCount = catalogList.length;
+                // Fetch all dashboard metrics in one server-side aggregated call
+                const statsRes = await axios.get('/api/clients/dashboard-stats/');
+                const stats = statsRes.data;
 
                 setStats(prev => [
-                    { ...prev[0], value: clientsCount.toString() },
-                    { ...prev[1], value: servicesCount.toString() },
-                    { ...prev[2], value: catalogCount.toString() },
-                    { ...prev[3], value: formattedRevenue }
+                    { ...prev[0], value: stats.total_clients.toString() },
+                    { ...prev[1], value: stats.active_services.toString() },
+                    { ...prev[2], value: stats.catalog_count.toString() },
+                    { ...prev[3], value: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(stats.monthly_revenue) }
                 ]);
 
-                // Prepare Chart Data: Revenue per Account Manager (Top 5)
-                const revenueByManager = {};
-                activeServices.forEach(service => {
-                    const client = clientsList.find(c => c.id === service.client);
-                    const managerName = (client && client.account_manager_name) ? client.account_manager_name : 'Sin Asignar';
-                    const price = parseFloat(service.agreed_price || 0);
+                setChartData(stats.revenue_by_manager);
 
-                    if (!revenueByManager[managerName]) {
-                        revenueByManager[managerName] = 0;
-                    }
-                    revenueByManager[managerName] += price;
-                });
-
-                const formattedChartData = Object.keys(revenueByManager)
-                    .map(name => ({
-                        name: name,
-                        ingresos: revenueByManager[name]
-                    }))
-                    .sort((a, b) => b.ingresos - a.ingresos)
-                    .slice(0, 5); // Top 5 managers by revenue
-
-                setChartData(formattedChartData);
+                // Fetch full client list for report/export features
+                const clientsRes = await axios.get('/api/clients/clients/');
+                let clientsList = clientsRes.data.results ? clientsRes.data.results : clientsRes.data;
+                setAllClients(clientsList);
 
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);

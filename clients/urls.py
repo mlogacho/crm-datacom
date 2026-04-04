@@ -6,7 +6,7 @@ operations related to the commercial pipeline.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ClientViewSet, ContactViewSet, ImportClientsView
+from .views import ClientViewSet, ContactViewSet, ImportClientsView, DashboardStatsView
 
 router = DefaultRouter()
 router.register(r'clients', ClientViewSet)
@@ -15,6 +15,9 @@ router.register(r'contacts', ContactViewSet)
 urlpatterns = [
     # Bulk import
     path('import/', ImportClientsView.as_view(), name='import-clients'),
+
+    # Aggregated dashboard metrics (avoids pagination limits)
+    path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
 
     # Clients and contacts API
     path('', include(router.urls)),

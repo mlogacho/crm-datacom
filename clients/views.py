@@ -445,3 +445,54 @@ class ImportClientsView(APIView):
 
         except Exception as e:
             return Response({"error": f"Error procesando archivo: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DashboardStatsView(APIView):
+    """Aggregate dashboard metrics server-side to avoid pagination issues."""
+
+    def get(self, request, *args, **kwargs):
+        from services.models import ClientService, ServiceCatalog
+        from django.db.models import Sum, Count, Q
+
+        user = request.user
+        is_super = user.is_superuser
+
+        # Base querysets scoped to the requesting user
+        client_qs = Client.objects.all()
+        service_qs = ClientService.objects.all()
+
+        if not is_super:
+            try:
+                role_name = user.profile.role.name if user.profile.role else ''
+            except Exception:
+                role_name = ''
+            if role_name in ['Ventas', 'Gerente de Cuenta']:
+                client_qs = client_qs.filter(account_manager=user)
+                service_qs = service_qs.filter(client__account_manager=user)
+
+        installed_qs = service_qs.filter(status='INSTALLED')
+
+        # Revenue by account manager (all pages, server-side)
+        rows = (
+            installed_qs
+            .values('client__account_manager__first_name', 'client__account_manager__last_name')
+            .annotate(revenue=Sum('agreed_price'))
+            .order_by('-revenue')
+        )
+
+        revenue_by_manager = []
+        for r in rows:
+            fname = r['client__account_manager__first_name'] or ''
+            lname = r['client__account_manager__last_name'] or ''
+            name = f'{fname} {lname}'.strip() or 'Sin Asignar'
+            revenue_by_manager.append({'name': name, 'ingresos': float(r['revenue'] or 0)})
+
+        total_revenue = installed_qs.aggregate(total=Sum('agreed_price'))['total'] or 0
+
+        return Response({
+            'total_clients': client_qs.count(),
+            'active_services': installed_qs.count(),
+            'catalog_count': ServiceCatalog.objects.count(),
+            'monthly_revenue': float(total_revenue),
+            'revenue_by_manager': revenue_by_manager[:5],  # Top 5
+        })
