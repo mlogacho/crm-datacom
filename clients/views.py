@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import F, Value, CharField
 from django.db.models.functions import Concat
 from .models import Client, Contact, ClientStatusHistory
@@ -309,123 +310,132 @@ class ImportClientsView(APIView):
 
             created_clients = 0
             created_services = 0
+            today = date.today()
 
-            for row in reader:
-                client_name = get_col(row, ['CLIENTE', 'CLIENTES', 'NOMBRE'])
-                if not client_name:
-                    continue  # Skip rows without client name
+            with transaction.atomic():
+                # Pre-load lookup tables into memory to avoid N+1 queries per row
+                user_lookup = {}
+                for u in User.objects.all():
+                    full = f"{u.first_name} {u.last_name}".strip().upper()
+                    if full:
+                        user_lookup[full] = u
+                    user_lookup[u.username.upper()] = u
 
-                # Extract Client Data
-                region = get_col(row, ['REGION', 'REGIÓN'])
-                city = get_col(row, ['CIUDAD'])
-                segment = get_col(row, ['SEGMENTO'])
-                service_location = get_col(row, ['UBICACION DEL SERVICIO', 'UBICACIÓN DEL SERVICIO', 'UBICACION', 'UBICACIÓN'])[:255]
-                classification_str = get_col(row, ['CLASIFICACION DEL CLIENTE', 'CLASIFICACIÓN DEL CLIENTE', 'CLASIFICACION', 'CLASIFICACIÓN']).strip().upper()
-                classification = 'ACTIVE' if 'ACTIVO' in classification_str else 'PROSPECT'
-                account_manager_text = get_col(row, ['GERENTE DE CUENTA', 'GERENTE'])
-                account_manager = resolve_account_manager_user(account_manager_text)
-                detail = get_col(row, ['DETALLE', 'DETALLES'])
-                business_status_text = get_col(row, ['ESTADO DEL NEGOCIO', 'ESTADO NEGOCIO', 'ESTADO'])
-                observation = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
-                
-                # We need tax_id and email. Will use dummy if empty.
-                tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"[:50]
-                email_raw = get_col(row, ['E-MAILS', 'EMAIL', 'CORREOS', 'CORREO', 'E-MAIL'])
-                email = email_raw.split(';')[0].split(',')[0].strip() if email_raw else ""
-                if not email or '@' not in email:
-                    email = "contacto@desconocido.com"
+                client_cache = {c.name: c for c in Client.objects.all()}
+                catalog_cache = {sc.name: sc for sc in ServiceCatalog.objects.all()}
+                seen_contacts = set(Contact.objects.values_list('client__name', 'name'))
 
-                # Find or create Client by name (Handling MultipleObjectsReturned)
-                client = Client.objects.filter(name=client_name).first()
-                client_created = False
-                
-                if not client:
-                    client = Client.objects.create(
-                        name=client_name,
-                        tax_id=tax_id,
-                        email=email,
-                        region=region,
-                        city=city,
-                        segment=segment,
-                        service_location=service_location,
-                        detail=detail,
-                        business_status=business_status_text,
-                        observation=observation,
-                        classification=classification,
-                        account_manager=account_manager,
-                        # client_type is removed
-                    )
-                    client_created = True
-                    created_clients += 1
+                for row in reader:
+                    client_name = get_col(row, ['CLIENTE', 'CLIENTES', 'NOMBRE'])
+                    if not client_name:
+                        continue  # Skip rows without client name
 
-                # Update client if existing
-                if not client_created:
-                    changed = False
-                    if not client.region and region: client.region = region; changed = True
-                    if not client.city and city: client.city = city; changed = True
-                    if not client.segment and segment: client.segment = segment; changed = True
-                    if not client.service_location and service_location: client.service_location = service_location; changed = True
-                    if not client.detail and detail: client.detail = detail; changed = True
-                    if not client.business_status and business_status_text: client.business_status = business_status_text; changed = True
-                    if not client.observation and observation: client.observation = observation; changed = True
-                    if classification_str and client.classification != classification: client.classification = classification; changed = True
-                    if not client.account_manager and account_manager: client.account_manager = account_manager; changed = True
-                    if changed: client.save()
+                    # Extract Client Data
+                    region = get_col(row, ['REGION', 'REGIÓN'])
+                    city = get_col(row, ['CIUDAD'])
+                    segment = get_col(row, ['SEGMENTO'])
+                    service_location = get_col(row, ['UBICACION DEL SERVICIO', 'UBICACIÓN DEL SERVICIO', 'UBICACION', 'UBICACIÓN'])[:255]
+                    classification_str = get_col(row, ['CLASIFICACION DEL CLIENTE', 'CLASIFICACIÓN DEL CLIENTE', 'CLASIFICACION', 'CLASIFICACIÓN']).strip().upper()
+                    classification = 'ACTIVE' if 'ACTIVO' in classification_str else 'PROSPECT'
+                    account_manager_text = get_col(row, ['GERENTE DE CUENTA', 'GERENTE']).strip().upper()
+                    account_manager = user_lookup.get(account_manager_text)
+                    detail = get_col(row, ['DETALLE', 'DETALLES'])
+                    business_status_text = get_col(row, ['ESTADO DEL NEGOCIO', 'ESTADO NEGOCIO', 'ESTADO'])
+                    observation = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
 
-                # Extract Contact Data
-                contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])[:255]
-                phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])[:50]
-                if contact_name:
-                    contact = Contact.objects.filter(client=client, name=contact_name).first()
-                    if not contact:
+                    tax_id = f"MIGRATED-{uuid.uuid4().hex[:8]}"[:50]
+                    email_raw = get_col(row, ['E-MAILS', 'EMAIL', 'CORREOS', 'CORREO', 'E-MAIL'])
+                    email = email_raw.split(';')[0].split(',')[0].strip() if email_raw else ""
+                    if not email or '@' not in email:
+                        email = "contacto@desconocido.com"
+
+                    # Find or create Client (use in-memory cache)
+                    client = client_cache.get(client_name)
+                    client_created = False
+
+                    if not client:
+                        client = Client.objects.create(
+                            name=client_name,
+                            tax_id=tax_id,
+                            email=email,
+                            region=region,
+                            city=city,
+                            segment=segment,
+                            service_location=service_location,
+                            detail=detail,
+                            business_status=business_status_text,
+                            observation=observation,
+                            classification=classification,
+                            account_manager=account_manager,
+                        )
+                        client_cache[client_name] = client
+                        client_created = True
+                        created_clients += 1
+
+                    if not client_created:
+                        changed = False
+                        if not client.region and region: client.region = region; changed = True
+                        if not client.city and city: client.city = city; changed = True
+                        if not client.segment and segment: client.segment = segment; changed = True
+                        if not client.service_location and service_location: client.service_location = service_location; changed = True
+                        if not client.detail and detail: client.detail = detail; changed = True
+                        if not client.business_status and business_status_text: client.business_status = business_status_text; changed = True
+                        if not client.observation and observation: client.observation = observation; changed = True
+                        if classification_str and client.classification != classification: client.classification = classification; changed = True
+                        if not client.account_manager and account_manager: client.account_manager = account_manager; changed = True
+                        if changed: client.save()
+
+                    # Contacts (use seen_contacts set to avoid per-row DB query)
+                    contact_name = get_col(row, ['CONTACTO', 'NOMBRE CONTACTO'])[:255]
+                    phones = get_col(row, ['TELÉFONOS', 'TELEFONOS', 'TELEFONO'])[:50]
+                    if contact_name and (client_name, contact_name) not in seen_contacts:
                         Contact.objects.create(
                             client=client,
                             name=contact_name,
                             email=email,
                             phone=phones
                         )
+                        seen_contacts.add((client_name, contact_name))
 
-                # Extract Service Data
-                service_str = get_col(row, ['SERVICIO', 'SERVICIOS', 'P&S', 'PRODUCTO'])
-                if service_str:
-                    # Find or create Service Catalog item
-                    service_cat = ServiceCatalog.objects.filter(name=service_str).first()
-                    if not service_cat:
-                        service_cat = ServiceCatalog.objects.create(
-                            name=service_str,
-                            description='Importado vía CSV',
-                            base_price=0.00
+                    # Service Data (use catalog cache)
+                    service_str = get_col(row, ['SERVICIO', 'SERVICIOS', 'P&S', 'PRODUCTO'])
+                    if service_str:
+                        service_cat = catalog_cache.get(service_str)
+                        if not service_cat:
+                            service_cat = ServiceCatalog.objects.create(
+                                name=service_str,
+                                description='Importado vía CSV',
+                                base_price=0.00
+                            )
+                            catalog_cache[service_str] = service_cat
+
+                        if not client.client_type_new:
+                            client.client_type_new = service_cat
+                            client.save()
+
+                        project_type = get_col(row, ['TIPO DE PROYECTO', 'PROYECTO'])
+                        estado_str = get_col(row, ['ESTADO']).upper()
+                        service_status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
+                        nrc = clean_decimal(get_col(row, ['NRC']))
+                        mrc = clean_decimal(get_col(row, ['MRC']))
+                        management_type = get_col(row, ['TIPO DE GESTION', 'TIPO DE GESTIÓN', 'GESTION'])
+                        call_result = get_col(row, ['RESULTADO DE LLAMADAS', 'RESULTADO', 'RESULTADOS'])
+                        obs = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
+
+                        ClientService.objects.create(
+                            client=client,
+                            service=service_cat,
+                            status=service_status,
+                            agreed_price=mrc,
+                            nrc=nrc,
+                            project_type=project_type,
+                            management_type=management_type,
+                            call_result=call_result,
+                            notes=obs,
+                            service_location=service_location,
+                            start_date=today
                         )
-
-                    # Update Client's main type if not set
-                    if not client.client_type_new:
-                        client.client_type_new = service_cat
-                        client.save()
-
-                    project_type = get_col(row, ['TIPO DE PROYECTO', 'PROYECTO'])
-                    estado_str = get_col(row, ['ESTADO']).upper()
-                    service_status = STATUS_MAPPING.get(estado_str, 'PROSPECTING')
-                    
-                    nrc = clean_decimal(get_col(row, ['NRC']))
-                    mrc = clean_decimal(get_col(row, ['MRC']))
-                    management_type = get_col(row, ['TIPO DE GESTION', 'TIPO DE GESTIÓN', 'GESTION'])
-                    call_result = get_col(row, ['RESULTADO DE LLAMADAS', 'RESULTADO', 'RESULTADOS'])
-                    obs = get_col(row, ['OBSERVACION', 'OBSERVACIONES', 'OBSERVACIÓN'])
-
-                    ClientService.objects.create(
-                        client=client,
-                        service=service_cat,
-                        status=service_status,
-                        agreed_price=mrc,
-                        nrc=nrc,
-                        project_type=project_type,
-                        management_type=management_type,
-                        call_result=call_result,
-                        notes=obs,
-                        service_location=service_location,
-                        start_date=date.today()
-                    )
-                    created_services += 1
+                        created_services += 1
 
             return Response({
                 "message": "Importación completada con éxito.",
